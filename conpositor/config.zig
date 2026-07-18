@@ -2,7 +2,8 @@ const std = @import("std");
 const zlua = @import("zlua");
 const wlr = @import("wlroots");
 const xkb = @import("xkbcommon");
-const c = @import("c.zig");
+const c = @import("c.zig").c;
+const known_folders = @import("known-folders");
 
 const Layout = @import("layout.zig");
 const Session = @import("session.zig");
@@ -16,17 +17,14 @@ const Lua = zlua.Lua;
 pub const ConfigError = error{
     Unimplemented,
     OutOfMemory,
-    LuaSyntax,
-    LuaFile,
-    LuaRuntime,
+    KeyInRegistry,
     LuaMsgHandler,
-    LuaError,
-};
+    LuaRuntime,
+} || known_folders.Error;
 
 pub const allocator_data = if (@import("builtin").mode == .Debug) struct {
-    var gpa: std.heap.GeneralPurposeAllocator(.{
+    var gpa: std.heap.DebugAllocator(.{
         .thread_safe = true,
-        .stack_trace_frames = 15,
     }) = .{};
     pub const allocator = gpa.allocator();
 
@@ -54,6 +52,10 @@ const FontInfo = struct {
     face: [:0]const u8,
     size: i32 = 12,
 
+    pub fn format(self: FontInfo, writer: *std.Io.Writer) !void {
+        try writer.print("{s} ({})", .{ self.face, self.size });
+    }
+
     pub fn deinit(self: *FontInfo) void {
         allocator.free(self.face);
     }
@@ -62,28 +64,52 @@ const FontInfo = struct {
 const MouseBindData = struct {
     mods: wlr.Keyboard.ModifierMask,
     button: u32,
+
+    pub fn format(self: MouseBindData, writer: *std.Io.Writer) !void {
+        if (self.mods.shift) try writer.writeAll("s+");
+        if (self.mods.ctrl) try writer.writeAll("c+");
+        if (self.mods.alt) try writer.writeAll("a+");
+        if (self.mods.logo) try writer.writeAll("l+");
+
+        try writer.print("{}", .{self.button});
+    }
 };
 
 const BindData = struct {
     mods: wlr.Keyboard.ModifierMask,
     key: xkb.Keysym,
+
+    pub fn format(self: BindData, writer: *std.Io.Writer) !void {
+        if (self.mods.shift) try writer.writeAll("s+");
+        if (self.mods.ctrl) try writer.writeAll("c+");
+        if (self.mods.alt) try writer.writeAll("a+");
+        if (self.mods.logo) try writer.writeAll("l+");
+
+        var buffer: [128]u8 = undefined;
+        const result = buffer[0..@intCast(self.key.getName(&buffer, 128))];
+
+        try writer.writeAll(result);
+    }
 };
 
 font: FontInfo,
 title_pad: i32 = 3,
 active_colors: std.EnumArray(PaletteColor, [4]f32) = .initFill(.{ 1, 1, 1, 1 }),
 inactive_colors: std.EnumArray(PaletteColor, [4]f32) = .initFill(.{ 1, 1, 1, 1 }),
-layouts: std.ArrayList(*Layout) = .init(allocator),
-tags: std.ArrayList([:0]const u8) = .init(allocator),
+layouts: std.array_list.Managed(*Layout) = .init(allocator),
+tags: std.array_list.Managed([:0]const u8) = .init(allocator),
 binds: std.AutoHashMap(BindData, LuaClosure) = .init(allocator),
 mouse_binds: std.AutoHashMap(MouseBindData, LuaClosure) = .init(allocator),
+home_path: []const u8 = undefined,
 
 // TODO: better structure?
-rules: std.ArrayList(struct { filter: LuaFilter, calls: LuaClosure }) = .init(allocator),
+rules: std.array_list.Managed(struct { filter: LuaFilter, calls: LuaClosure }) = .init(allocator),
 
 // TODO: Hash Map
-events: std.ArrayList(struct { event: Event, calls: LuaClosure }) = .init(allocator),
+events: std.array_list.Managed(struct { event: Event, calls: LuaClosure }) = .init(allocator),
 lua: *Lua = undefined,
+io: std.Io,
+environ_map: *const std.process.Environ.Map,
 
 const LuaFilter = struct {
     title: ?[]const u8,
@@ -140,14 +166,14 @@ const LuaClosure = struct {
     }
 
     pub fn toLua(self: LuaClosure, lua: *Lua) void {
-        _ = lua.rawGetIndex(zlua.registry_index, self.ref);
+        _ = lua.getIndexRaw(zlua.registry_index, self.ref);
     }
 
     pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !LuaClosure {
         if (!lua.isFunction(index)) return error.LuaError;
 
         lua.pushValue(index); // func
-        const r = try lua.ref(zlua.registry_index);
+        const r = lua.ref(zlua.registry_index);
 
         var info: zlua.DebugInfo = undefined;
         lua.pushValue(index); // func
@@ -156,7 +182,7 @@ const LuaClosure = struct {
         const upvs = try allocator.alloc(i32, info.num_upvalues);
         for (1..info.num_upvalues + 1) |v| {
             _ = try lua.getUpvalue(index, @intCast(v)); // func table upv
-            upvs[v - 1] = try lua.ref(zlua.registry_index);
+            upvs[v - 1] = lua.ref(zlua.registry_index);
         }
 
         return .{
@@ -560,7 +586,7 @@ const LuaClient = struct {
             self.child.dirty.title = true;
 
             _ = lua.getField(-1, "left");
-            const left_len = lua.rawLen(-1);
+            const left_len = lua.lenRaw(-1);
 
             for (1..left_len + 1) |idx| {
                 _ = try lua.pushAny(idx);
@@ -573,7 +599,7 @@ const LuaClient = struct {
             lua.pop(1);
 
             _ = lua.getField(-1, "center");
-            const center_len = lua.rawLen(-1);
+            const center_len = lua.lenRaw(-1);
 
             for (1..center_len + 1) |idx| {
                 _ = try lua.pushAny(idx);
@@ -586,7 +612,7 @@ const LuaClient = struct {
             lua.pop(1);
 
             _ = lua.getField(-1, "right");
-            const right_len = lua.rawLen(-1);
+            const right_len = lua.lenRaw(-1);
 
             for (1..right_len + 1) |idx| {
                 _ = try lua.pushAny(idx);
@@ -674,33 +700,51 @@ const LuaMethods = struct {
             return error.BadCycleDirection;
     }
 
-    pub fn spawn(_: *Config, name: [:0]const u8, args: [][*:0]const u8) !void {
-        const child_name = try allocator.dupeZ(u8, name);
-        const child_args: [:null]?[*:0]const u8 = (try std.mem.concatWithSentinel(allocator, ?[*:0]const u8, &.{ &.{child_name}, args, &.{null} }, null));
+    fn spawnThread(self: *Config, name: [:0]const u8, args: [][*:0]const u8) void {
+        const argv = allocator.alloc([]const u8, args.len + 1) catch unreachable;
+        defer allocator.free(argv);
 
-        const pid = std.posix.fork() catch {
-            return error.Other;
-        };
-
-        if (pid == 0) {
-            for (child_args) |arg|
-                std.log.info("run {?s}", .{arg});
-
-            cleanupChild();
-
-            const pid2 = std.posix.fork() catch c._exit(1);
-            if (pid2 == 0) {
-                std.posix.execvpeZ(child_name, child_args, std.c.environ) catch c._exit(1);
-            }
-
-            c._exit(0);
+        argv[0] = @ptrCast(name);
+        for (args, argv[1..]) |in, *out| {
+            out.* = std.mem.span(in);
         }
 
-        // Wait the intermediate child.
-        const ret = std.posix.waitpid(pid, 0);
-        if (!std.posix.W.IFEXITED(ret.status) or
-            (std.posix.W.IFEXITED(ret.status) and std.posix.W.EXITSTATUS(ret.status) != 0))
-        {}
+        _ = std.process.run(allocator, self.io, .{
+            .argv = argv,
+            .environ_map = self.environ_map,
+        }) catch unreachable;
+    }
+
+    pub fn spawn(self: *Config, name: [:0]const u8, args: [][*:0]const u8) !void {
+        const thread = try std.Thread.spawn(.{
+            .allocator = allocator,
+        }, spawnThread, .{ self, name, args });
+        thread.detach();
+
+        // const child_name = try allocator.dupeZ(u8, name);
+        // const child_args: [:null]?[*:0]const u8 = (try std.mem.concatWithSentinel(allocator, ?[*:0]const u8, &.{ &.{child_name}, args, &.{null} }, null));
+
+        // const pid = std.c.fork();
+
+        // if (pid == 0) {
+        //     for (child_args) |arg|
+        //         std.log.info("run {?s}", .{arg});
+
+        //     cleanupChild();
+
+        //     const pid2 = std.c.fork();
+        //     if (pid2 == 0) {
+        //         if (std.c.execve(child_name, child_args, std.c.environ) != 0) c._exit(1);
+        //     }
+
+        //     c._exit(0);
+        // }
+
+        // // Wait the intermediate child.
+        // const ret = std.c.waitpid(pid, null, 0);
+        // if (!std.posix.W.IFEXITED(@intCast(ret)) or
+        //     (std.posix.W.IFEXITED(@intCast(ret)) and std.posix.W.EXITSTATUS(@intCast(ret)) != 0))
+        // {}
     }
 
     pub fn set_font(self: *Config, face: []const u8, size: f32) !void {
@@ -711,7 +755,7 @@ const LuaMethods = struct {
             .size = @intFromFloat(size),
         };
 
-        std.log.info("set font {}", .{self.font});
+        std.log.info("set font {f}", .{self.font});
     }
 
     pub fn add_layout(self: *Config, name: []const u8) !LuaLayout {
@@ -752,7 +796,7 @@ const LuaMethods = struct {
         var b: f32 = 1.0;
         var a: f32 = 1.0;
 
-        std.log.info("color_name: {s}", .{color_name});
+        std.log.info("color_name {s}", .{color_name});
 
         if (color_name.len == 9) {
             if (color_name[0] != '#')
@@ -816,7 +860,7 @@ const LuaMethods = struct {
             if (try self.binds.fetchPut(key, calls)) |value|
                 value.value.deinit();
 
-            std.log.info("create bind {}", .{key});
+            std.log.info("create bind {f}", .{key});
         }
 
         if (old_top != lua.getTop() + 0)
@@ -861,7 +905,7 @@ const LuaMethods = struct {
         if (try self.mouse_binds.fetchPut(key, calls)) |value|
             value.value.deinit();
 
-        std.log.info("set mouse bind {}", .{key});
+        std.log.info("set mouse bind {f}", .{key});
 
         if (old_top != lua.getTop() + 0)
             return error.LuaError;
@@ -1034,13 +1078,18 @@ pub fn setupLua(self: *Config) ConfigError!void {
         std.log.err("getrlimit failed, using system default file descriptor limit ", .{});
     }
 
-    const home_dir = std.posix.getenv("HOME") orelse "./";
-    const libs_dir = std.posix.getenv("CONPOSITOR_LIB_DIR") orelse "/usr/lib";
+    self.home_path = try known_folders.getPath(
+        self.io,
+        allocator,
+        self.environ_map,
+        .home,
+    ) orelse ".";
+    const libs_dir = self.environ_map.get("CONPOSITOR_LIB_DIR") orelse "/usr/lib";
 
     const path: []const u8 = try std.mem.concat(allocator, u8, &.{
-        home_dir,
+        self.home_path,
         "/.config/conpositor/?.lua;",
-        home_dir,
+        self.home_path,
         "/.config/conpositor/?;",
         "?;",
         "?.lua;",
@@ -1060,7 +1109,7 @@ pub fn setupLua(self: *Config) ConfigError!void {
 
     lua.openLibs();
 
-    _ = try lua.getGlobal("package");
+    _ = lua.getGlobal("package");
 
     _ = lua.pushString(path);
     lua.setField(-2, "path");
@@ -1167,18 +1216,18 @@ pub fn getTitleHeight(self: *Config) i32 {
 }
 
 pub fn sourcePath(self: *Config, path: []const u8) ConfigError!void {
-    const home_dir = std.posix.getenv("HOME") orelse "./";
+    const home_dir = self.home_path;
 
-    const cmd = try std.fmt.allocPrintZ(allocator, "{s}/.config/conpositor/{s}", .{
+    const cmd = try std.fmt.allocPrintSentinel(allocator, "{s}/.config/conpositor/{s}", .{
         home_dir,
         path,
-    });
+    }, 0);
     defer allocator.free(cmd);
 
     self.lua.doFile(cmd) catch |err| {
         const result = self.lua.toString(-1) catch "unknown lua error";
 
-        std.log.err("{!}: {s}", .{ err, result });
+        std.log.err("{s}: {s}", .{ @errorName(err), result });
 
         var idx: i32 = 1;
         while (self.lua.getStack(idx) catch null) |di| : (idx += 1) {
@@ -1190,14 +1239,19 @@ pub fn sourcePath(self: *Config, path: []const u8) ConfigError!void {
     };
 }
 
-pub fn run(self: *Config, command: []const u8) !?[:0]const u8 {
+pub const RunResult = struct {
+    failed: bool,
+    result: [*:0]const u8,
+};
+
+pub fn run(self: *Config, command: []const u8) !RunResult {
     const cmd = try allocator.dupeZ(u8, command);
     defer allocator.free(cmd);
 
     self.lua.doString(cmd) catch |err| {
         const result = self.lua.toString(-1) catch "unknown lua error";
 
-        std.log.err("{!}: {s}", .{ err, result });
+        std.log.err("{s}: {s}", .{ @errorName(err), result });
 
         var idx: i32 = 1;
         while (self.lua.getStack(idx) catch null) |di| : (idx += 1) {
@@ -1207,10 +1261,18 @@ pub fn run(self: *Config, command: []const u8) !?[:0]const u8 {
             std.log.info("{?s}", .{di.name});
         }
 
-        return result;
+        return .{
+            .failed = true,
+            .result = result,
+        };
     };
 
-    return null;
+    const result = self.lua.toString(-1) catch "";
+
+    return .{
+        .failed = false,
+        .result = result,
+    };
 }
 
 pub fn sendEvent(self: *Config, comptime T: type, event_id: Event, data: T) ConfigError!bool {
@@ -1242,13 +1304,25 @@ pub fn conpositorLogFn(
         return;
     }
 
+    const io = std.Options.debug_io;
+    const prev = io.swapCancelProtection(.blocked);
+    defer _ = io.swapCancelProtection(prev);
+
+    var buffer: [64]u8 = undefined;
+    const stderr = std.debug.lockStderr(&buffer).terminal();
+    defer std.debug.unlockStderr();
+
     const scope_prefix = "(" ++ switch (scope) {
         std.log.default_log_scope => "conpositor",
-        .SandEEE, .Steam => @tagName(scope),
         else => @tagName(scope),
     } ++ "): ";
 
-    const prefix = "[" ++ comptime level.asText() ++ "] " ++ scope_prefix;
+    const prefix = "[" ++ switch (comptime level) {
+        .err => "Err",
+        .warn => "Wrn",
+        .info => "Inf",
+        .debug => "Dbg",
+    } ++ "] " ++ scope_prefix;
 
     const color = switch (level) {
         .err => "\x1b[1;91m",
@@ -1257,12 +1331,8 @@ pub fn conpositorLogFn(
         .debug => "\x1b[0;37m",
     };
 
-    std.debug.lockStdErr();
-    defer std.debug.unlockStdErr();
-
     // Print the message to stderr, silently ignoring any errors
-    const stderr = std.io.getStdErr().writer();
-    nosuspend stderr.print(prefix ++ color ++ format ++ "\x1b[m\n", args) catch return;
+    nosuspend stderr.writer.print(prefix ++ color ++ format ++ "\x1b[m\n", args) catch return;
 }
 
 pub fn deinit(self: *Config) void {

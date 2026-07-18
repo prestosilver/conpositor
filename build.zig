@@ -46,7 +46,7 @@ pub fn build(b: *std.Build) void {
     scanner.generate("zwp_pointer_gestures_v1", 3);
     scanner.generate("zwp_pointer_constraints_v1", 1);
     scanner.generate("zwp_tablet_manager_v2", 1);
-    scanner.generate("zxdg_decoration_manager_v1", 1);
+    scanner.generate("zxdg_decoration_manager_v1", 2);
     scanner.generate("ext_session_lock_manager_v1", 1);
     scanner.generate("wp_cursor_shape_manager_v1", 1);
     scanner.generate("wp_tearing_control_manager_v1", 1);
@@ -55,21 +55,23 @@ pub fn build(b: *std.Build) void {
 
     scanner.generate("conpositor_ipc_manager_v1", 1);
 
-    const wayland = b.createModule(.{
+    const wayland_mod = b.createModule(.{
         .root_source_file = scanner.result,
         .target = target,
         .optimize = optimize,
     });
 
     const xkbcommon_dep = b.dependency("xkbcommon", .{});
+    const known_folders_dep = b.dependency("known_folders", .{});
     const pixman_dep = b.dependency("pixman", .{});
     const wlroots_dep = b.dependency("wlroots", .{});
     const cairo_dep = b.dependency("cairo", .{});
     const lua_dep = b.dependency("zlua", .{
         .shared = true,
+        .lang = .lua55,
     });
 
-    wlroots_dep.module("wlroots").addImport("wayland", wayland);
+    wlroots_dep.module("wlroots").addImport("wayland", wayland_mod);
     wlroots_dep.module("wlroots").addImport("xkbcommon", xkbcommon_dep.module("xkbcommon"));
     wlroots_dep.module("wlroots").addImport("pixman", pixman_dep.module("pixman"));
 
@@ -78,30 +80,33 @@ pub fn build(b: *std.Build) void {
     // the best way to do so with the current std.Build API.
     wlroots_dep.module("wlroots").resolved_target = target;
     wlroots_dep.module("wlroots").optimize = optimize;
-    wlroots_dep.module("wlroots").linkSystemLibrary("wlroots-0.18", .{});
+    wlroots_dep.module("wlroots").linkSystemLibrary("wlroots-0.20", .{});
 
     const conpositor = b.addExecutable(.{
         .name = "conpositor",
-        .root_source_file = b.path("conpositor/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("conpositor/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "wayland", .module = wayland_mod },
+                .{ .name = "xkbcommon", .module = xkbcommon_dep.module("xkbcommon") },
+                .{ .name = "wlroots", .module = wlroots_dep.module("wlroots") },
+                .{ .name = "cairo", .module = cairo_dep.module("cairo") },
+                .{ .name = "pixman", .module = pixman_dep.module("pixman") },
+                .{ .name = "zlua", .module = lua_dep.module("zlua") },
+                .{ .name = "known-folders", .module = known_folders_dep.module("known-folders") },
+            },
+        }),
     });
 
-    conpositor.linkLibC();
-
-    conpositor.root_module.addImport("wayland", wayland);
-    conpositor.root_module.addImport("xkbcommon", xkbcommon_dep.module("xkbcommon"));
-    conpositor.root_module.addImport("wlroots", wlroots_dep.module("wlroots"));
-    conpositor.root_module.addImport("cairo", cairo_dep.module("cairo"));
-    conpositor.root_module.addImport("pixman", pixman_dep.module("pixman"));
-    conpositor.root_module.addImport("zlua", lua_dep.module("zlua"));
-
-    conpositor.linkSystemLibrary("lua");
-    conpositor.linkSystemLibrary("wayland-server");
-    conpositor.linkSystemLibrary("xcb");
-    conpositor.linkSystemLibrary("libinput");
-    conpositor.linkSystemLibrary("xkbcommon");
-    conpositor.linkSystemLibrary("pixman-1");
+    conpositor.root_module.linkSystemLibrary("lua", .{});
+    conpositor.root_module.linkSystemLibrary("wayland-server", .{});
+    conpositor.root_module.linkSystemLibrary("xcb", .{});
+    conpositor.root_module.linkSystemLibrary("libinput", .{});
+    conpositor.root_module.linkSystemLibrary("xkbcommon", .{});
+    conpositor.root_module.linkSystemLibrary("pixman-1", .{});
 
     const lib_step = b.addInstallDirectory(.{
         .source_dir = b.path("libs"),
@@ -117,16 +122,18 @@ pub fn build(b: *std.Build) void {
     // IPC utility
     const conpositormsg = b.addExecutable(.{
         .name = "conpositor-msg",
-        .root_source_file = b.path("conpositormsg/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("conpositormsg/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "wayland", .module = wayland_mod },
+            },
+        }),
     });
 
-    conpositormsg.linkLibC();
-
-    conpositormsg.root_module.addImport("wayland", wayland);
-
-    conpositormsg.linkSystemLibrary("wayland-client");
+    conpositormsg.root_module.linkSystemLibrary("wayland-client", .{});
 
     b.installArtifact(conpositormsg);
 
@@ -166,9 +173,11 @@ pub fn build(b: *std.Build) void {
 
     // Creates a step for unit testing. This only builds the test executable
     const conpositor_unit_tests = b.addTest(.{
-        .root_source_file = b.path("conpositor/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("conpositor/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     const run_conpositor_unit_tests = b.addRunArtifact(conpositor_unit_tests);

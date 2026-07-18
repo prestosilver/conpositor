@@ -4,7 +4,7 @@ const wlr = @import("wlroots");
 const std = @import("std");
 const xcb = @import("xcb");
 
-const c = @import("c.zig");
+const c = @import("c.zig").c;
 
 const Config = @import("config.zig");
 const Monitor = @import("monitor.zig");
@@ -72,6 +72,9 @@ xdg_decoration_manager: *wlr.XdgDecorationManagerV1,
 compositor: *wlr.Compositor,
 xwayland: ?*wlr.Xwayland,
 net_atoms: std.EnumArray(NetAtom, c.xcb_atom_t),
+
+io: std.Io,
+environ_map: *std.process.Environ.Map,
 
 input: Input = undefined,
 
@@ -144,8 +147,9 @@ const Events = struct {
 
     fn new_toplevel_decoration(listener: *wl.Listener(*wlr.XdgToplevelDecorationV1), decoration: *wlr.XdgToplevelDecorationV1) void {
         _ = listener;
+        _ = decoration;
 
-        _ = decoration.setMode(.server_side);
+        // _ = decoration.setMode(.server_side);
     }
 
     fn new_layer_surface(listener: *wl.Listener(*wlr.LayerSurfaceV1), xdg_layer_surface: *wlr.LayerSurfaceV1) void {
@@ -172,10 +176,10 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xdg_toplevel_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
-        std.log.info("{*} {}", .{ xdg_surface.base, xdg_surface.base.role });
+        std.log.info("toplevel {*} {}", .{ xdg_surface.base, xdg_surface.base.role });
 
         self.newClient(.{ .XDG = xdg_surface.base }) catch |err| {
-            std.log.err("failed to init client {}", .{err});
+            std.log.err("failed to init toplevel client {}", .{err});
         };
     }
 
@@ -255,7 +259,7 @@ fn outputManagerApply(self: *Session, is_test: bool, output_configuration: *wlr.
     var iter = output_configuration.heads.iterator(.forward);
     while (iter.next()) |config_head| {
         const wlr_output = config_head.state.output;
-        const monitor: *Monitor = @ptrFromInt(wlr_output.data);
+        const monitor: *Monitor = @ptrCast(@alignCast(wlr_output.data));
 
         var state = wlr.Output.State.init();
         defer state.finish();
@@ -286,9 +290,9 @@ fn outputManagerApply(self: *Session, is_test: bool, output_configuration: *wlr.
 
         ok = ok and
             if (is_test)
-            wlr_output.testState(&state)
-        else
-            wlr_output.commitState(&state);
+                wlr_output.testState(&state)
+            else
+                wlr_output.commitState(&state);
 
         std.log.info("move monitor {*}, {} {}", .{ monitor, monitor.mode, monitor.window });
     }
@@ -311,7 +315,7 @@ fn newLayerSurfaceClient(self: *Session, surface: *wlr.LayerSurfaceV1) !void {
 }
 
 fn newClient(self: *Session, surface: Client.ClientSurface) !void {
-    std.log.info("process xdg surface create for {}", .{surface});
+    std.log.info("process xdg surface create for {f}", .{surface});
 
     try Client.init(self, surface);
 }
@@ -350,7 +354,7 @@ const logger = struct {
         }
     }
 
-    pub fn log(importance: wlr.log.Importance, fmt: [*:0]const u8, args: *std.builtin.VaList) callconv(.C) void {
+    pub fn log(importance: wlr.log.Importance, fmt: [*:0]const u8, args: *std.builtin.VaList) callconv(.c) void {
         var out = allocator.alloc(u8, std.mem.len(fmt) + 1024) catch unreachable;
         defer allocator.free(out);
 
@@ -360,42 +364,39 @@ const logger = struct {
             if (fmt[in_idx] == '%') {
                 in_idx += 2;
                 switch (fmt[(in_idx - 1)]) {
-                    's' => out_idx += (std.fmt.bufPrint(out[out_idx..], "{s}", get_arg: {
+                    's' => out_idx += if (std.fmt.bufPrint(out[out_idx..], "{s}", get_arg: {
                         const arg = readArg(args, [*:0]const u8);
-                        break :get_arg .{arg[0..std.mem.len(arg)]};
-                    }) catch &.{}).len,
-                    'u' => {
-                        out_idx += (std.fmt.bufPrint(
-                            out[out_idx..],
-                            "{}",
-                            .{readArg(args, u64)},
-                        ) catch &.{}).len;
-                    },
+                        break :get_arg .{std.mem.span(arg)};
+                    })) |val| val.len else |_| 0,
+                    'u' => out_idx += if (std.fmt.bufPrint(out[out_idx..], "{}", get_arg: {
+                        const arg = readArg(args, u64);
+                        break :get_arg .{arg};
+                    })) |val| val.len else |_| 0,
                     'd' => {
                         if (fmt[in_idx + 1] == 'X') {
-                            out_idx += (std.fmt.bufPrint(
+                            out_idx += if (std.fmt.bufPrint(
                                 out[out_idx..],
                                 "{X}",
                                 .{readArg(args, i64)},
-                            ) catch &.{}).len;
+                            )) |val| val.len else |_| 0;
                         } else {
-                            out_idx += (std.fmt.bufPrint(
+                            out_idx += if (std.fmt.bufPrint(
                                 out[out_idx..],
                                 "{}",
                                 .{readArg(args, i64)},
-                            ) catch &.{}).len;
+                            )) |val| val.len else |_| 0;
                         }
                     },
-                    'f' => out_idx += (std.fmt.bufPrint(
+                    'f' => out_idx += if (std.fmt.bufPrint(
                         out[out_idx..],
                         "{}",
                         .{readArg(args, f64)},
-                    ) catch &.{}).len,
-                    'p' => out_idx += (std.fmt.bufPrint(
+                    )) |val| val.len else |_| 0,
+                    'p' => out_idx += if (std.fmt.bufPrint(
                         out[out_idx..],
                         "{?}",
                         .{readArg(args, ?*anyopaque)},
-                    ) catch &.{}).len,
+                    )) |val| val.len else |_| 0,
                     else => |ch| {
                         if (ch <= '9' and ch >= '0') {
                             while (fmt[in_idx] <= '9' and fmt[in_idx] >= '0') : (in_idx += 1) {}
@@ -404,7 +405,7 @@ const logger = struct {
                                 out[out_idx..],
                                 "{x}",
                                 .{arg},
-                            ) catch &.{}).len;
+                            ) catch unreachable).len;
                             out_idx += 1;
                         } else {
                             _ = readArg(args, *anyopaque);
@@ -421,7 +422,7 @@ const logger = struct {
             }
         }
 
-        const zig_log = std.log.scoped(.WLR);
+        const zig_log = std.log.scoped(.@"wayland roots");
 
         switch (importance) {
             .err => zig_log.err("{s}", .{out[0..out_idx]}),
@@ -433,7 +434,7 @@ const logger = struct {
     }
 };
 
-pub fn init() SessionError!Session {
+pub fn init(io: std.Io, environ_map: *std.process.Environ.Map) SessionError!Session {
     wlr.log.init(.debug, &logger.log);
 
     const wl_server = try wl.Server.create();
@@ -474,7 +475,7 @@ pub fn init() SessionError!Session {
     _ = try wlr.Viewporter.create(wl_server);
     _ = try wlr.SinglePixelBufferManagerV1.create(wl_server);
     _ = try wlr.FractionalScaleManagerV1.create(wl_server, 1);
-    _ = try wlr.Presentation.create(wl_server, backend);
+    _ = try wlr.Presentation.create(wl_server, backend, 1);
     _ = try wlr.GammaControlManagerV1.create(wl_server);
 
     const xdg_activation = try wlr.XdgActivationV1.create(wl_server);
@@ -499,7 +500,12 @@ pub fn init() SessionError!Session {
     return .{
         .config = .{
             .font = .{ .face = try allocator.dupeZ(u8, "monospace") },
+            .environ_map = environ_map,
+            .io = io,
         },
+
+        .environ_map = environ_map,
+        .io = io,
 
         .server = wl_server,
         .backend = backend,
@@ -555,9 +561,11 @@ pub fn attachEvents(self: *Session) SessionError!void {
 }
 
 pub fn launch(self: *Session) SessionError!void {
-    const signals = [_]i32{ std.c.SIG.CHLD, std.c.SIG.INT, std.c.SIG.TERM, std.c.SIG.PIPE };
-
-    inline for (signals) |sig| {
+    inline for ([_]std.c.SIG{
+        .INT,
+        .TERM,
+        .PIPE,
+    }) |sig| {
         _ = std.c.sigaction(sig, &.{
             .flags = std.c.SA.RESTART,
             .handler = .{ .handler = &handleSignal },
@@ -568,8 +576,8 @@ pub fn launch(self: *Session) SessionError!void {
     var buf: [11]u8 = undefined;
     const socket = try self.server.addSocketAuto(&buf);
 
-    _ = c.setenv("WAYLAND_DISPLAY", socket, 1);
-    _ = c.setenv("DISPLAY", self.xwayland.?.display_name, 1);
+    try self.environ_map.put("WAYLAND_DISPLAY", socket);
+    try self.environ_map.put("DISPLAY", std.mem.span(self.xwayland.?.display_name));
 
     try self.config.sourcePath("init.lua");
 
@@ -675,12 +683,12 @@ pub fn getSurfaceObjects(self: *Session, surface: *wlr.Surface) ObjectData {
 
     if (wlr.XwaylandSurface.tryFromWlrSurface(root_surface)) |x_surface|
         return .{
-            .client = @ptrFromInt(x_surface.data),
+            .client = @ptrCast(@alignCast(x_surface.data)),
         };
 
     if (wlr.LayerSurfaceV1.tryFromWlrSurface(root_surface)) |layer_surface|
         return .{
-            .layer_surface = @ptrFromInt(layer_surface.data),
+            .layer_surface = @ptrCast(@alignCast(layer_surface.data)),
         };
 
     var vxdg_surface = wlr.XdgSurface.tryFromWlrSurface(root_surface);
@@ -696,7 +704,7 @@ pub fn getSurfaceObjects(self: *Session, surface: *wlr.Surface) ObjectData {
             },
             .toplevel => {
                 return .{
-                    .client = @ptrFromInt(xdg_surface.*.data),
+                    .client = @ptrCast(@alignCast(xdg_surface.*.data)),
                 };
             },
             .none => return .{},
@@ -784,7 +792,7 @@ pub fn getObjectsAt(self: *Session, x: f64, y: f64) ObjectData {
     var result: ObjectData = .{};
 
     result.monitor = if (self.output_layout.outputAt(x, y)) |output|
-        @as(?*Monitor, @ptrFromInt(output.data))
+        @as(?*Monitor, @ptrCast(@alignCast(output.data)))
     else
         null;
 
@@ -795,8 +803,8 @@ pub fn getObjectsAt(self: *Session, x: f64, y: f64) ObjectData {
 
         var pnode: ?*wlr.SceneNode = node;
         while (pnode != null and (result.client == null and result.layer_surface == null)) : (pnode = &pnode.?.parent.?.node) {
-            result.client = @as(?*Client, @ptrFromInt(pnode.?.data));
-            result.layer_surface = @as(?*LayerSurface, @ptrFromInt(pnode.?.data));
+            result.client = @as(?*Client, @ptrCast(@alignCast(pnode.?.data)));
+            result.layer_surface = @as(?*LayerSurface, @ptrCast(@alignCast(pnode.?.data)));
 
             if (result.client != null and result.client.?.client_id != 10)
                 result.client = null;
@@ -826,7 +834,7 @@ pub fn focusStack(self: *Session, dir: CycleDir) !void {
     const target = switch (dir) {
         .forward => blk: {
             const IterType = wl.list.Head(Client, .link).Iterator(.forward);
-            var iter: IterType = .{ .head = &sel.link, .current = &sel.link };
+            var iter: IterType = .{ .head = &sel.link, .current = &sel.link, .future = sel.link.next orelse break :blk sel };
             while (iter.next()) |client| {
                 if (&client.link == &self.clients.link)
                     continue;
@@ -840,7 +848,7 @@ pub fn focusStack(self: *Session, dir: CycleDir) !void {
         },
         .backward => blk: {
             const IterType = wl.list.Head(Client, .link).Iterator(.reverse);
-            var iter: IterType = .{ .head = &sel.link, .current = &sel.link };
+            var iter: IterType = .{ .head = &sel.link, .current = &sel.link, .future = sel.link.next orelse break :blk sel };
             while (iter.next()) |client| {
                 if (&client.link == &self.clients.link)
                     continue;
@@ -870,14 +878,20 @@ pub fn addIpc(self: *Session, resource: *conpositor.IpcSessionV1) void {
 
 var signal_session: ?*Session = null;
 
-pub fn handleSignal(signo: i32) callconv(.c) void {
+pub fn handleSignal(signo: std.c.SIG) callconv(.c) void {
     const session = signal_session orelse return;
 
-    if (signo == std.c.SIG.CHLD) {
+    if (signo == .CHLD) {
         var info: std.os.linux.siginfo_t = undefined;
         var tmp: u32 = 0;
 
-        while (std.os.linux.waitid(.ALL, 0, &info, std.c.W.EXITED | std.c.W.NOHANG | std.c.W.NOWAIT) == 0 and
+        while (std.os.linux.waitid(
+            .ALL,
+            0,
+            &info,
+            std.c.W.EXITED | std.c.W.NOHANG | std.c.W.NOWAIT,
+            null,
+        ) == 0 and
             info.fields.common.first.piduid.pid != 0 and
             (session.xwayland == null or info.fields.common.first.piduid.pid != session.xwayland.?.server.?.pid))
             _ = std.os.linux.waitpid(info.fields.common.first.piduid.pid, &tmp, 0);

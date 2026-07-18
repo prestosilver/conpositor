@@ -4,7 +4,7 @@ const conpositor = @import("wayland").client.conpositor;
 
 // Inspired by https://github.com/riverwm/river/blob/master/riverctl/main.zig
 
-var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
+var gpa: std.heap.DebugAllocator(.{}) = .{};
 const allocator = gpa.allocator();
 
 pub const Globals = struct {
@@ -14,12 +14,14 @@ pub const Globals = struct {
 
 var command: []const u8 = "";
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+
     var idx: usize = 1;
-    if (std.os.argv.len <= 1)
+    if (args.len <= 1)
         return error.MissingParams;
 
-    command = std.mem.span(std.os.argv[idx]);
+    command = args[idx];
     idx += 1;
 
     const display = try wl.Display.connect(null);
@@ -34,16 +36,16 @@ pub fn main() !void {
     const session = try manager.getSession();
 
     if (std.mem.eql(u8, command, "run")) {
-        var run_command: std.ArrayList(u8) = .init(allocator);
+        var run_command: std.array_list.Managed(u8) = .init(allocator);
         defer run_command.deinit();
 
         var first: bool = true;
-        while (idx < std.os.argv.len) : (idx += 1) {
+        while (idx < args.len) : (idx += 1) {
             if (first) {
                 try run_command.appendSlice(" ");
                 first = false;
             }
-            try run_command.appendSlice(std.mem.span(std.os.argv[idx]));
+            try run_command.appendSlice(args[idx]);
         }
         const new_command = try allocator.dupeZ(u8, std.mem.trim(u8, run_command.items, " "));
 
@@ -78,60 +80,65 @@ var statusData: struct {
 } = .{};
 
 fn writeOutput() !void {
-    const stdout = std.io.getStdOut().writer();
+    const debug_io = std.Options.debug_io;
+
+    const stdout: std.Io.File = .stdout();
+    var writer = stdout.writer(debug_io, &.{});
+
     defer statusData.changed = .{};
 
     if (std.mem.eql(u8, command, "status")) {
         if (statusData.focus) |focus| {
-            try stdout.print("focused:\n", .{});
-            try stdout.print("  label: {s}\n", .{focus.label});
-            try stdout.print("  appid: {s}\n", .{focus.appid});
-            try stdout.print("  icon:  {s}\n", .{focus.icon});
-            try stdout.print("  title: {s}\n", .{focus.title});
+            try writer.interface.print("focused:\n", .{});
+            try writer.interface.print("  label: {s}\n", .{focus.label});
+            try writer.interface.print("  appid: {s}\n", .{focus.appid});
+            try writer.interface.print("  icon:  {s}\n", .{focus.icon});
+            try writer.interface.print("  title: {s}\n", .{focus.title});
         }
 
-        try stdout.print("tags:\n", .{});
-        try stdout.print("  count: {}\n", .{statusData.tags.len});
-        try stdout.print("  active: {s}\n", .{statusData.activeTag});
+        try writer.interface.print("tags:\n", .{});
+        try writer.interface.print("  count: {}\n", .{statusData.tags.len});
+        try writer.interface.print("  active: {s}\n", .{statusData.activeTag});
         for (statusData.tags, 0..) |tag_name, idx| {
-            try stdout.print("  names[{}]: {s}\n", .{ idx, tag_name });
+            try writer.interface.print("  names[{}]: {s}\n", .{ idx, tag_name });
         }
 
         if (statusData.layout) |layout|
-            try stdout.print("layout: {s}\n", .{layout});
+            try writer.interface.print("layout: {s}\n", .{layout});
     } else if (std.mem.eql(u8, command, "layout")) {
         if (!statusData.changed.layout)
             return;
 
         if (statusData.layout) |layout|
-            try stdout.print("{s}\n", .{layout});
+            try writer.interface.print("{s}\n", .{layout});
     } else if (std.mem.eql(u8, command, "icon")) {
         if (!statusData.changed.focus)
             return;
 
         if (statusData.focus) |focus| {
-            try stdout.print("{s}\n", .{focus.icon});
+            try writer.interface.print("{s}\n", .{focus.icon});
         } else {
-            try stdout.print("\n", .{});
+            try writer.interface.print("\n", .{});
         }
     } else if (std.mem.eql(u8, command, "label")) {
         if (!statusData.changed.focus)
             return;
 
         if (statusData.focus) |focus| {
-            try stdout.print("{s}\n", .{focus.label});
+            try writer.interface.print("{s}\n", .{focus.label});
         } else {
-            try stdout.print("Desktop\n", .{});
+            try writer.interface.print("Desktop\n", .{});
         }
     } else if (std.mem.eql(u8, command, "tag")) {
         if (!statusData.changed.tags and !statusData.changed.activeTag)
             return;
 
-        try stdout.print("{s}\n", .{statusData.activeTag});
+        try writer.interface.print("{s}\n", .{statusData.activeTag});
     } else {
-        const stderr = std.io.getStdErr().writer();
+        const stderr: std.Io.File = .stdout();
+        var err_writer = stderr.writer(debug_io, &.{});
 
-        try stderr.print("missing command\n", .{});
+        try err_writer.interface.print("missing command\n", .{});
     }
 }
 
@@ -140,7 +147,7 @@ fn outputListener(_: *conpositor.IpcOutputV1, event: conpositor.IpcOutputV1.Even
         .frame => {
             writeOutput() catch @panic("stdout write failed");
 
-            std.posix.exit(0);
+            std.c.exit(0);
         },
         .tags => |tags| {
             statusData.tags = allocator.alloc([*:0]const u8, tags.amount) catch &.{};
@@ -185,18 +192,24 @@ fn outputListener(_: *conpositor.IpcOutputV1, event: conpositor.IpcOutputV1.Even
 fn commandListener(_: *conpositor.CommandOutputV1, event: conpositor.CommandOutputV1.Event, _: ?*anyopaque) void {
     switch (event) {
         .success => |req| {
-            const stdout = std.io.getStdOut().writer();
+            const debug_io = std.Options.debug_io;
 
-            stdout.print("{s}\n", .{req.output}) catch {};
+            const stdout: std.Io.File = .stdout();
+            var writer = stdout.writer(debug_io, &.{});
 
-            std.posix.exit(0);
+            writer.interface.print("{s}\n", .{req.output}) catch {};
+
+            std.c.exit(0);
         },
         .fail => |req| {
-            const stderr = std.io.getStdErr().writer();
+            const debug_io = std.Options.debug_io;
 
-            stderr.print("{s}\n", .{req.reason}) catch {};
+            const stdout: std.Io.File = .stdout();
+            var writer = stdout.writer(debug_io, &.{});
 
-            std.posix.exit(1);
+            writer.interface.print("Failed: {s}\n", .{req.reason}) catch {};
+
+            std.c.exit(1);
         },
     }
 }

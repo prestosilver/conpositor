@@ -18,12 +18,12 @@ surface: cairo.Surface,
 context: cairo.Context,
 
 const Impl = struct {
-    fn destroy(wlr_buffer: *wlr.Buffer) callconv(.C) void {
+    fn destroy(wlr_buffer: *wlr.Buffer) callconv(.c) void {
         const self: *CairoBuffer = @fieldParentPtr("base", wlr_buffer);
         self.destroy();
     }
 
-    fn beginDataPtrAccess(wlr_buffer: *wlr.Buffer, _: u32, data: *?*anyopaque, format: *u32, stride: *usize) callconv(.C) bool {
+    fn beginDataPtrAccess(wlr_buffer: *wlr.Buffer, _: u32, data: *?*anyopaque, format: *u32, stride: *usize) callconv(.c) bool {
         const self: *CairoBuffer = @fieldParentPtr("base", wlr_buffer);
 
         data.* = self.surface.getData() catch return false;
@@ -33,7 +33,7 @@ const Impl = struct {
         return true;
     }
 
-    fn endDataPtrAccess(wlr_buffer: *wlr.Buffer) callconv(.C) void {
+    fn endDataPtrAccess(wlr_buffer: *wlr.Buffer) callconv(.c) void {
         const self: *CairoBuffer = @fieldParentPtr("base", wlr_buffer);
 
         _ = self;

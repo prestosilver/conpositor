@@ -10,9 +10,9 @@ const Tab = @This();
 
 const allocator = Config.allocator;
 
-left_modules: std.ArrayList(Config.LuaModule) = .init(allocator),
-center_modules: std.ArrayList(Config.LuaModule) = .init(allocator),
-right_modules: std.ArrayList(Config.LuaModule) = .init(allocator),
+left_modules: std.array_list.Managed(Config.LuaModule) = .init(allocator),
+center_modules: std.array_list.Managed(Config.LuaModule) = .init(allocator),
+right_modules: std.array_list.Managed(Config.LuaModule) = .init(allocator),
 
 pub fn getText(
     self: *Tab,
@@ -24,7 +24,7 @@ pub fn getText(
         .right => self.right_modules,
     };
 
-    var result: std.ArrayList(u8) = .init(allocator);
+    var result: std.array_list.Managed(u8) = .init(allocator);
     defer result.deinit();
 
     const client: *Client = @fieldParentPtr("tab", self);

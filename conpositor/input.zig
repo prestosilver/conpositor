@@ -3,7 +3,7 @@ const wlr = @import("wlroots");
 const std = @import("std");
 const xkb = @import("xkbcommon");
 const cairo = @import("cairo");
-const c = @import("c.zig");
+const c = @import("c.zig").c;
 
 const Session = @import("session.zig");
 const Client = @import("client.zig");
@@ -35,12 +35,60 @@ const xkb_rules: xkb.RuleNames = .{
     .variant = null,
 };
 
+const PointerConstraint = struct {
+    constraint: *wlr.PointerConstraintV1,
+    events: PointerConstraint.Events = .{},
+    input: *Input,
+
+    const Events = struct {
+        set_region_event: wl.Listener(void) = .init(PointerConstraint.Events.setRegion),
+        destroy_event: wl.Listener(*wlr.PointerConstraintV1) = .init(PointerConstraint.Events.deinit),
+
+        fn setRegion(listener: *wl.Listener(void)) void {
+            _ = listener;
+        }
+
+        fn deinit(listener: *wl.Listener(*wlr.PointerConstraintV1), constraint: *wlr.PointerConstraintV1) void {
+            const events: *PointerConstraint.Events = @fieldParentPtr("destroy_event", listener);
+            const self: *PointerConstraint = @fieldParentPtr("events", events);
+
+            self.events.destroy_event.link.remove();
+
+            if (self.input.active_constraint == constraint) {
+                self.input.active_constraint = null;
+            }
+
+            allocator.destroy(self);
+        }
+    };
+
+    pub fn init(input: *Input, constraint: *wlr.PointerConstraintV1) !void {
+        const self = try allocator.create(PointerConstraint);
+
+        self.* = .{
+            .input = input,
+            .constraint = constraint,
+        };
+
+        constraint.events.destroy.add(&self.events.destroy_event);
+        const focused = input.session.focusedClient() orelse return;
+        if (focused.getSurface() == constraint.surface) {
+            if (input.active_constraint == constraint)
+                return;
+
+            input.active_constraint = constraint;
+            constraint.sendActivated();
+        }
+    }
+};
+
 const Events = struct {
     cursor_motion_event: wl.Listener(*wlr.Pointer.event.Motion) = .init(Events.cursorMotion),
     cursor_motion_absolute_event: wl.Listener(*wlr.Pointer.event.MotionAbsolute) = .init(Events.cursorMotionAbsolute),
     cursor_button_event: wl.Listener(*wlr.Pointer.event.Button) = .init(Events.cursorButton),
     cursor_axis_event: wl.Listener(*wlr.Pointer.event.Axis) = .init(Events.cursorAxis),
     cursor_frame_event: wl.Listener(*wlr.Cursor) = .init(Events.cursorFrame),
+    create_pointer_constraint_event: wl.Listener(*wlr.PointerConstraintV1) = .init(Events.createPointerConstraint),
 
     request_set_cursor_event: wl.Listener(*wlr.Seat.event.RequestSetCursor) = .init(Events.requestSetCursor),
     set_cursor_shape_event: wl.Listener(*wlr.CursorShapeManagerV1.event.RequestSetShape) = .init(Events.setCursorShape),
@@ -131,6 +179,15 @@ const Events = struct {
         const self: *Input = @fieldParentPtr("events", events);
 
         self.requestSetCursor(event) catch |ex| {
+            @panic(@errorName(ex));
+        };
+    }
+
+    fn createPointerConstraint(listener: *wl.Listener(*wlr.PointerConstraintV1), constraint: *wlr.PointerConstraintV1) void {
+        const events: *Events = @fieldParentPtr("create_pointer_constraint_event", listener);
+        const self: *Input = @fieldParentPtr("events", events);
+
+        PointerConstraint.init(self, constraint) catch |ex| {
             @panic(@errorName(ex));
         };
     }
@@ -313,11 +370,13 @@ cursor: *wlr.Cursor,
 cursor_mode: CursorMode,
 xcursor_image: ?[*:0]const u8 = null,
 
-//relative_pointer_manager: *wlr.RelativePointerManagerV1,
 cursor_shape_manager: *wlr.CursorShapeManagerV1,
 xcursor_manager: *wlr.XcursorManager,
 seat: *wlr.Seat,
 events: Events,
+constraints: *wlr.PointerConstraintsV1,
+active_constraint: ?*wlr.PointerConstraintV1 = null,
+relative_pointer_manager: *wlr.RelativePointerManagerV1 = undefined,
 
 keyboards: wl.list.Head(Keyboard, .link) = undefined,
 locked: bool = false,
@@ -347,6 +406,11 @@ pub fn init(self: *Input, session: *Session) !void {
     seat.events.request_set_primary_selection.add(&self.events.request_set_primary_selection);
     seat.events.request_set_selection.add(&self.events.request_set_selection);
 
+    const pointer_constraints = try wlr.PointerConstraintsV1.create(session.server);
+    pointer_constraints.events.new_constraint.add(&self.events.create_pointer_constraint_event);
+
+    const relative_pointer_manager = try wlr.RelativePointerManagerV1.create(session.server);
+
     std.log.warn("TODO: virtual keyboards", .{});
 
     self.* = .{
@@ -357,6 +421,8 @@ pub fn init(self: *Input, session: *Session) !void {
         .seat = seat,
         .events = self.events,
         .cursor_shape_manager = cursor_shape_manager,
+        .relative_pointer_manager = relative_pointer_manager,
+        .constraints = pointer_constraints,
     };
 
     self.keyboards.init();
@@ -366,16 +432,16 @@ pub fn xwaylandReady(self: *Input, xwayland: *wlr.Xwayland) void {
     xwayland.setSeat(self.seat);
 
     self.xcursor_image = "default";
-    if (self.xcursor_manager.getXcursor("default", 1)) |xcursor| {
-        xwayland.setCursor(
-            xcursor.images[0].buffer,
-            xcursor.images[0].width * 4,
-            xcursor.images[0].width,
-            xcursor.images[0].height,
-            @as(i32, @intCast(xcursor.*.images[0].*.hotspot_x)),
-            @as(i32, @intCast(xcursor.*.images[0].*.hotspot_y)),
-        );
-    }
+    //if (self.xcursor_manager.getXcursor("default", 1)) |xcursor| {
+    //    xwayland.setCursor(
+    //        xcursor.images[0].buffer,
+    //        xcursor.images[0].width * 4,
+    //        xcursor.images[0].width,
+    //        xcursor.images[0].height,
+    //        @as(i32, @intCast(xcursor.*.images[0].*.hotspot_x)),
+    //        @as(i32, @intCast(xcursor.*.images[0].*.hotspot_y)),
+    //    );
+    //}
 }
 
 pub fn motionNotify(
@@ -400,7 +466,7 @@ pub fn motionNotify(
             const cursor_x: i32 = @intFromFloat(self.cursor.x);
             const cursor_y: i32 = @intFromFloat(self.cursor.y);
 
-            const scene_node: *wlr.SceneNode = @ptrFromInt(icon.data);
+            const scene_node: *wlr.SceneNode = @ptrCast(@alignCast(icon.data));
 
             scene_node.setPosition(
                 icon.surface.current.dx + cursor_x,
@@ -448,7 +514,20 @@ pub fn endDrag(self: *Input) !bool {
 }
 
 fn cursorMotion(self: *Input, motion: *wlr.Pointer.event.Motion) !void {
-    self.cursor.move(motion.device, motion.delta_x, motion.delta_y);
+    self.relative_pointer_manager.sendRelativeMotion(
+        self.seat,
+        @as(u64, @intCast(motion.time_msec)) * 1000,
+        motion.delta_x,
+        motion.delta_y,
+        motion.unaccel_dx,
+        motion.unaccel_dy,
+    );
+    if (self.active_constraint == null)
+        self.cursor.move(
+            motion.device,
+            motion.delta_x,
+            motion.delta_y,
+        );
     try self.motionNotify(motion.time_msec);
 }
 
@@ -473,7 +552,9 @@ fn pointerFocus(self: *Input, target_client: ?*Client, surface: ?*wlr.Surface, t
     }
 
     if (internal_call) {
-        const now: std.posix.timespec = std.posix.clock_gettime(std.posix.CLOCK.MONOTONIC) catch
+        var now: std.posix.timespec = undefined;
+
+        if (std.c.clock_gettime(std.posix.CLOCK.MONOTONIC, &now) > 0)
             @panic("CLOCK_MONOTONIC not supported");
 
         atime = @bitCast(now.sec * 1000 + @divTrunc(now.nsec, 1000000));

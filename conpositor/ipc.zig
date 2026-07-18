@@ -5,6 +5,9 @@ const std = @import("std");
 
 const Monitor = @import("monitor.zig");
 const Session = @import("session.zig");
+const Config = @import("config.zig");
+
+const allocator = Config.allocator;
 
 pub fn managerBind(client: *wl.Client, session: *Session, version: u32, id: u32) void {
     const ipc_manager_resource = conpositor.IpcManagerV1.create(client, version, id) catch {
@@ -25,7 +28,7 @@ fn handleManagerRequest(
         .destroy => manager.destroy(),
         .get_output => |req| {
             const wlr_output = wlr.Output.fromWlOutput(req.output) orelse return;
-            const monitor: *Monitor = @ptrFromInt(wlr_output.data);
+            const monitor: *Monitor = @ptrCast(@alignCast(wlr_output.data));
 
             const resource = conpositor.IpcOutputV1.create(
                 manager.getClient(),
@@ -64,29 +67,42 @@ fn handleSessionRequest(
     request: conpositor.IpcSessionV1.Request,
     session: *Session,
 ) void {
+    handleSessionRequestInternal(manager, request, session) catch |err|
+        switch (err) {
+            error.OutOfMemory => {
+                manager.getClient().postNoMemory();
+                std.log.err("out of memory", .{});
+            },
+            else => return,
+        };
+}
+
+fn handleSessionRequestInternal(
+    manager: *conpositor.IpcSessionV1,
+    request: conpositor.IpcSessionV1.Request,
+    session: *Session,
+) !void {
     switch (request) {
         .destroy => manager.destroy(),
         .run_command => |req| {
             const command = std.mem.span(req.command);
 
-            const resource = conpositor.CommandOutputV1.create(
+            const resource = try conpositor.CommandOutputV1.create(
                 manager.getClient(),
                 manager.getVersion(),
                 req.id,
-            ) catch {
-                manager.getClient().postNoMemory();
-                std.log.err("out of memory", .{});
-                return;
-            };
+            );
+            defer resource.destroy();
 
-            if (session.config.run(command) catch |e|
-                @errorName(e)) |err|
-            {
-                resource.sendFail(err);
-            }
+            const return_command = try std.fmt.allocPrint(allocator, "return {s}", .{command});
+            defer allocator.free(return_command);
 
-            resource.sendSuccess("Ran command");
-            resource.destroy();
+            const result = try session.config.run(return_command);
+
+            if (result.failed)
+                resource.sendFail(result.result)
+            else
+                resource.sendSuccess(result.result);
         },
         .get_focused_output => |req| {
             if (session.focusedMonitor) |monitor| {

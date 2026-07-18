@@ -45,8 +45,18 @@ dirty: packed struct {
 events: Events = .{},
 
 const Events = struct {
-    frame_event: wl.Listener(*wlr.Output) = wl.Listener(*wlr.Output).init(Events.frame),
-    deinit_event: wl.Listener(*wlr.Output) = wl.Listener(*wlr.Output).init(Events.deinit),
+    frame_event: wl.Listener(*wlr.Output) = .init(Events.frame),
+    deinit_event: wl.Listener(*wlr.Output) = .init(Events.deinit),
+    present_event: wl.Listener(*wlr.Output.event.Present) = .init(Events.present),
+
+    fn present(listener: *wl.Listener(*wlr.Output.event.Present), _: *wlr.Output.event.Present) void {
+        const events: *Monitor.Events = @fieldParentPtr("present_event", listener);
+        const self: *Monitor = @fieldParentPtr("events", events);
+
+        self.present() catch |ex| {
+            @panic(@errorName(ex));
+        };
+    }
 
     fn frame(listener: *wl.Listener(*wlr.Output), _: *wlr.Output) void {
         const events: *Monitor.Events = @fieldParentPtr("frame_event", listener);
@@ -112,7 +122,7 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
     const scene_output = try session.scene.createSceneOutput(output);
 
     const result: *Monitor = try allocator.create(Monitor);
-    output.data = @intFromPtr(result);
+    output.data = @ptrCast(@alignCast(result));
 
     session.monitors.append(result);
 
@@ -130,9 +140,12 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
     result.ipc_status.init();
 
     output.events.frame.add(&result.events.frame_event);
+    output.events.present.add(&result.events.present_event);
     output.events.destroy.add(&result.events.deinit_event);
 
     const layout_output = try session.output_layout.add(result.output, result.mode.x, result.mode.y);
+
+    std.log.info("{}", .{layout_output});
 
     result.scene_output.setPosition(layout_output.x, layout_output.y);
 
@@ -174,7 +187,7 @@ pub fn close(self: *Monitor) !void {
 pub fn isClientVisible(self: *Monitor, client: *Client) bool {
     return client.floating or
         (if (self.layout) |layout| layout.container.has(client.container) else true) and
-        client.monitor == self and self.tag == client.tag;
+            client.monitor == self and self.tag == client.tag;
 }
 
 pub fn getFocusedClient(self: *Monitor) ?*Client {
@@ -205,6 +218,8 @@ pub fn setActiveTag(self: *Monitor, tag: u8) void {
 
     self.tag = tag;
     self.dirty.layout = true;
+    self.dirty.tabs = true;
+    self.dirty.focus = true;
 
     var iter = self.ipc_status.iterator(.forward);
     while (iter.next()) |resource| {
@@ -341,6 +356,7 @@ pub fn setLayout(self: *Monitor, layout: ?*Layout) void {
 }
 
 fn deinit(self: *Monitor) void {
+    self.events.present_event.link.remove();
     self.events.frame_event.link.remove();
     self.events.deinit_event.link.remove();
 
@@ -379,10 +395,13 @@ fn frame(self: *Monitor) !void {
 
     _ = self.scene_output.commit(null);
 
-    var now: std.posix.timespec = std.posix.clock_gettime(std.posix.CLOCK.MONOTONIC) catch
+    var now: std.posix.timespec = undefined;
+    if (std.c.clock_gettime(std.posix.CLOCK.MONOTONIC, &now) > 0)
         @panic("CLOCK_MONOTONIC not supported");
     self.scene_output.sendFrameDone(&now);
+}
 
+fn present(self: *Monitor) !void {
     if (self.dirty.layout or self.dirty.force_layout)
         try self.updateLayout();
 
@@ -487,13 +506,13 @@ fn arrangeLayer(self: *Monitor, idx: usize, usable: *wlr.Box, exclusive: bool) v
     var iter = self.layers[idx].iterator(.forward);
     while (iter.next()) |layersurface| {
         const wlr_layer_surface = layersurface.surface;
+
         const state = &wlr_layer_surface.current;
+
+        if (!wlr_layer_surface.initialized) continue;
 
         if (exclusive != (state.exclusive_zone > 0))
             continue;
-
-        if (!layersurface.mapped)
-            return;
 
         layersurface.scene.configure(&full_area, usable);
         layersurface.popups.node.setPosition(

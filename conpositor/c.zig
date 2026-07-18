@@ -1,4 +1,4 @@
-pub usingnamespace @cImport({
+pub const c = @cImport({
     @cDefine("_POSIX_C_SOURCE", "200809L");
 
     @cInclude("stdlib.h");

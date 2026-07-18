@@ -20,7 +20,7 @@ surface: *wlr.LayerSurfaceV1,
 scene: *wlr.SceneLayerSurfaceV1,
 scene_tree: *wlr.SceneTree,
 popups: *wlr.SceneTree,
-mapped: bool,
+mapped: bool = false,
 link: wl.list.Link = undefined,
 bounds: wlr.Box = std.mem.zeroes(wlr.Box),
 
@@ -67,9 +67,11 @@ const Events = struct {
 
 pub fn init(session: *Session, surf: *wlr.LayerSurfaceV1) !void {
     const monitor: *Monitor = if (surf.output) |output|
-        @as(*Monitor, @ptrFromInt(output.data))
+        @as(*Monitor, @ptrCast(@alignCast(output.data)))
     else
         session.focusedMonitor orelse {
+            std.log.info("no focused monitor", .{});
+
             surf.destroy();
             return;
         };
@@ -82,8 +84,8 @@ pub fn init(session: *Session, surf: *wlr.LayerSurfaceV1) !void {
     surf.output = monitor.output;
 
     const result = try allocator.create(LayerSurface);
-    scene_tree.node.data = @intFromPtr(result);
-    surf.data = @intFromPtr(result);
+    scene_tree.node.data = @ptrCast(@alignCast(result));
+    surf.data = @ptrCast(@alignCast(result));
 
     result.* = .{
         .surface = surf,
@@ -92,7 +94,6 @@ pub fn init(session: *Session, surf: *wlr.LayerSurfaceV1) !void {
         .scene = scene,
         .scene_tree = scene_tree,
         .popups = popups,
-        .mapped = false,
     };
 
     surf.surface.events.map.add(&result.events.map_event);
@@ -104,7 +105,6 @@ pub fn init(session: *Session, surf: *wlr.LayerSurfaceV1) !void {
 
     const old_state = surf.current;
     surf.current = surf.pending;
-    result.mapped = true;
     try monitor.arrangeLayers();
     surf.current = old_state;
 
@@ -121,15 +121,21 @@ pub fn notifyEnter(self: *LayerSurface, seat: *wlr.Seat, kb: ?*wlr.Keyboard) voi
 
 fn map(self: *LayerSurface) !void {
     try self.session.input.motionNotify(0);
+
+    std.log.info("mapped {*}", .{self});
 }
 
 fn commit(self: *LayerSurface) !void {
+    std.log.info("commiting {*}", .{self});
+
     if (self.surface.output) |output| {
-        self.monitor = @ptrFromInt(output.data);
+        self.monitor = @ptrCast(@alignCast(output.data));
     } else return;
 
     if (self.monitor == null)
         return;
+
+    std.log.info("{*} is on {*}", .{ self, self.monitor });
 
     const lyr = self.session.layers.get(@enumFromInt(@intFromEnum(self.surface.current.layer)));
     if (lyr != self.scene_tree.node.parent) {
@@ -144,7 +150,9 @@ fn commit(self: *LayerSurface) !void {
 
     if (@as(u32, @bitCast(self.surface.current.committed)) == 0 and self.mapped == self.surface.surface.mapped)
         return;
+
     self.mapped = self.surface.surface.mapped;
+    std.log.info("{*} is mapped: {}", .{ self, self.mapped });
 
     if (self.monitor) |m|
         try m.arrangeLayers();
@@ -157,11 +165,13 @@ fn unmap(self: *LayerSurface) !void {
     if (self.session.exclusive_focus == self.surface.surface)
         self.session.exclusive_focus = null;
 
-    self.monitor = @ptrFromInt(self.surface.output.?.data);
+    self.monitor = @ptrCast(@alignCast(self.surface.output.?.data));
     if (self.monitor) |m|
         try m.arrangeLayers();
 
     try self.session.input.motionNotify(0);
+
+    std.log.info("unmapped {*}", .{self});
 }
 
 fn deinit(self: *LayerSurface) void {
