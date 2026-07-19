@@ -100,6 +100,8 @@ const Events = struct {
     output_manager_apply_event: wl.Listener(*wlr.OutputConfigurationV1) = .init(Events.outputManagerApply),
     output_manager_test_event: wl.Listener(*wlr.OutputConfigurationV1) = .init(Events.outputManagerTest),
 
+    commit_popup_event: wl.Listener(*wlr.Surface) = .init(commitPopup),
+
     fn newOutput(listener: *wl.Listener(*wlr.Output), wlr_output: *wlr.Output) void {
         const events: *Session.Events = @fieldParentPtr("new_output_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
@@ -165,9 +167,9 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xdg_popup_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
-        std.log.info("{*} {}", .{ xdg_surface.base, xdg_surface.base.role });
+        std.log.info("popup {*} {}", .{ xdg_surface.base, xdg_surface.base.role });
 
-        self.newClient(.{ .XDG = xdg_surface.base }) catch |err| {
+        self.newPopup(xdg_surface) catch |err| {
             std.log.err("failed to init client {}", .{err});
         };
     }
@@ -187,7 +189,7 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xdg_surface_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
-        std.log.info("{*} {}", .{ xdg_surface, xdg_surface.role });
+        std.log.info("surface {*} {}", .{ xdg_surface, xdg_surface.role });
 
         self.newClient(.{ .XDG = xdg_surface }) catch |err| {
             std.log.err("failed to init client {}", .{err});
@@ -312,6 +314,63 @@ fn newLayerSurfaceClient(self: *Session, surface: *wlr.LayerSurfaceV1) !void {
     std.log.info("new layer surface {*}", .{surface});
 
     try LayerSurface.init(self, surface);
+}
+
+fn newPopup(self: *Session, popup: *wlr.XdgPopup) !void {
+    popup.base.surface.events.commit.add(&self.events.commit_popup_event);
+}
+
+fn commitPopup(listener: *wl.Listener(*wlr.Surface), surface: *wlr.Surface) void {
+    const events: *Session.Events = @fieldParentPtr("commit_popup_event", listener);
+    const self: *Session = @fieldParentPtr("events", events);
+
+    // remove link
+    defer listener.link.remove();
+
+    const popup_surface = wlr.XdgSurface.tryFromWlrSurface(surface) orelse return;
+    const popup = popup_surface.role_data.popup orelse return;
+
+    if (!popup.base.initial_commit)
+        return;
+
+    std.log.info("commit popup {*}", .{popup});
+
+    const objects = self.getSurfaceObjects(popup.base.surface);
+    if (popup.parent == null or (objects.client == null and objects.layer_surface == null))
+        return;
+
+    const parent = @as(?*wlr.SceneTree, @ptrCast(@alignCast(popup.parent.?.data))) orelse
+        if (objects.client) |client|
+            client.popup_surface
+        else if (objects.layer_surface) |layer_surface|
+            layer_surface.scene_tree
+        else
+            unreachable;
+
+    const new_surface = parent.createSceneXdgSurface(popup.base) catch unreachable;
+    popup.base.surface.data = @ptrCast(@alignCast(new_surface));
+
+    var box = if (objects.client) |client|
+        client.monitor.?.window
+    else if (objects.layer_surface) |layer_surface|
+        layer_surface.monitor.?.mode
+    else
+        unreachable;
+
+    box.x -= if (objects.client) |client|
+        client.getInnerBounds().x
+    else if (objects.layer_surface) |layer_surface|
+        layer_surface.bounds.x
+    else
+        unreachable;
+    box.y -= if (objects.client) |client|
+        client.getInnerBounds().y
+    else if (objects.layer_surface) |layer_surface|
+        layer_surface.bounds.y
+    else
+        unreachable;
+
+    popup.unconstrainFromBox(&box);
 }
 
 fn newClient(self: *Session, surface: Client.ClientSurface) !void {
@@ -475,7 +534,7 @@ pub fn init(io: std.Io, environ_map: *std.process.Environ.Map) SessionError!Sess
     _ = try wlr.Viewporter.create(wl_server);
     _ = try wlr.SinglePixelBufferManagerV1.create(wl_server);
     _ = try wlr.FractionalScaleManagerV1.create(wl_server, 1);
-    _ = try wlr.Presentation.create(wl_server, backend, 1);
+    _ = try wlr.Presentation.create(wl_server, backend, 2);
     _ = try wlr.GammaControlManagerV1.create(wl_server);
 
     const xdg_activation = try wlr.XdgActivationV1.create(wl_server);
@@ -486,9 +545,9 @@ pub fn init(io: std.Io, environ_map: *std.process.Environ.Map) SessionError!Sess
 
     // todo: locked bg
 
-    const xdg_shell = try wlr.XdgShell.create(wl_server, 5);
+    const xdg_shell = try wlr.XdgShell.create(wl_server, 6);
 
-    const layer_shell = try wlr.LayerShellV1.create(wl_server, 4);
+    const layer_shell = try wlr.LayerShellV1.create(wl_server, 3);
     const idle_notifier = try wlr.IdleNotifierV1.create(wl_server);
     const idle_inhibit_manager = try wlr.IdleInhibitManagerV1.create(wl_server);
     const session_lock_manager = try wlr.SessionLockManagerV1.create(wl_server);

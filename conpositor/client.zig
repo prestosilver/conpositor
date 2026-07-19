@@ -260,53 +260,7 @@ const SHADOW_SIZE = 10;
 pub fn init(session: *Session, target: ClientSurface) !void {
     switch (target) {
         .XDG => |surface| {
-            if (surface.role == .popup) {
-                const objects = session.getSurfaceObjects(surface.surface);
-
-                if (surface.role_data.popup.?.parent == null or
-                    (objects.client == null and objects.layer_surface == null))
-                    return;
-
-                const parent = @as(?*wlr.SceneTree, @ptrCast(@alignCast(surface.role_data.popup.?.parent.?.data))) orelse
-                    if (objects.client) |client|
-                        client.popup_surface
-                    else if (objects.layer_surface) |layer_surface|
-                        layer_surface.scene_tree
-                    else
-                        unreachable;
-
-                const new_surface = try parent.createSceneXdgSurface(surface);
-                surface.surface.data = @ptrCast(@alignCast(new_surface));
-                new_surface.node.raiseToTop();
-
-                if ((objects.client != null and objects.client.?.monitor == null) or
-                    (objects.layer_surface != null and objects.layer_surface.?.monitor == null))
-                    return;
-
-                var box = if (objects.client) |client|
-                    client.monitor.?.window
-                else if (objects.layer_surface) |layer_surface|
-                    layer_surface.monitor.?.mode
-                else
-                    unreachable;
-
-                box.x -= if (objects.client) |client|
-                    client.getInnerBounds().x
-                else if (objects.layer_surface) |layer_surface|
-                    layer_surface.bounds.x
-                else
-                    unreachable;
-                box.y -= if (objects.client) |client|
-                    client.getInnerBounds().y
-                else if (objects.layer_surface) |layer_surface|
-                    layer_surface.bounds.y
-                else
-                    unreachable;
-
-                surface.role_data.popup.?.unconstrainFromBox(&box);
-
-                return;
-            } else if (surface.role == .none)
+            if (surface.role == .none)
                 return;
 
             const client = try allocator.create(Client);
@@ -929,6 +883,8 @@ fn updateTop(self: *Client) !void {
 
     self.frame.shadow_tree.node.raiseToTop();
     self.scene.node.raiseToTop();
+
+    self.popup_surface.node.raiseToTop();
 }
 
 fn associate(self: *Client) !void {
@@ -983,8 +939,6 @@ fn map(self: *Client) !void {
 
     self.frame = try .init(self.session.config.getColor(false, .border), self);
 
-    self.popup_surface.node.raiseToTop();
-
     self.session.clients.append(self);
     self.session.focus_clients.append(self);
 
@@ -1010,8 +964,18 @@ fn map(self: *Client) !void {
         self.session.monitors.first() orelse
         return error.MapToNothing);
 
-    if (self.monitor) |m|
-        m.dirty.layout = true;
+    if (self.monitor) |monitor| {
+        monitor.dirty.layout = true;
+
+        // center floating windows
+        if (self.managed and self.floating) {
+            var bounds: wlr.Box = self.getBounds();
+            bounds.x = monitor.window.x + @divTrunc(monitor.window.width - bounds.width, 2);
+            bounds.y = monitor.window.y + @divTrunc(monitor.window.height - bounds.height, 2);
+
+            _ = self.setFloatingSize(bounds);
+        }
+    }
 
     switch (self.surface) {
         .XDG => |surface| if (surface.role_data.toplevel) |toplevel| {
