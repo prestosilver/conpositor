@@ -1,4 +1,4 @@
--- want gaps plz
+-- require some builtin libraries
 gaps = require("conpositor.gaps")
 funcs = require("conpositor.funcs")
 mouse = require("conpositor.mouse")

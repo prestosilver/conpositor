@@ -510,10 +510,14 @@ const LuaClient = struct {
             self.child.setBorder(border);
         }
 
+        // TODO: Move client icons to lua. 
+        // tag clients by index, and have lua store/script the icon.
         pub fn set_icon(self: *LuaClient, icon: ?[:0]const u8) void {
             self.child.setIcon(@ptrCast(icon));
         }
 
+        // TODO: Move client labels to lua. 
+        // tag clients by index, and have lua store/script the label.
         pub fn set_label(self: *LuaClient, label: ?[:0]const u8) void {
             self.child.setLabel(label);
         }
@@ -758,6 +762,7 @@ const LuaMethods = struct {
         std.log.info("set font {f}", .{self.font});
     }
 
+    // TODO: move layout storage to lua
     pub fn add_layout(self: *Config, name: []const u8) !LuaLayout {
         const container = try allocator.create(Layout.Container);
 
@@ -779,6 +784,7 @@ const LuaMethods = struct {
         return .{ .child = layout };
     }
 
+    // TODO: Convert to indexes instead of name, that way the names will be lua defined.
     pub fn new_tag(self: *Config, name: [:0]const u8) !LuaTag {
         const name_dup = try allocator.dupeZ(u8, name);
         try self.tags.append(name_dup);
