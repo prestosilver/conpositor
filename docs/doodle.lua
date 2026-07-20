@@ -239,17 +239,13 @@ local function debug_window_set(value)
     end
 end
 
--- default modules
-session:add_rule({}, function(client)
-    client:set_modules(default_modules)
-end)
-
 -- module switch bind
 session:add_bind(super .. "S", "L", debug_window_set(false))
 session:add_bind(super, "L", debug_window_set(true))
 
 -- default rule
 session:add_rule({}, function(client)
+    client:set_modules(default_modules)
     client:set_stack(stacks.c)
     client:set_floating(true)
     client:set_icon("?")
@@ -260,20 +256,12 @@ local client_rule = function(filter, rule)
     local filter = filter
     local rule = rule
     session:add_rule(filter, function(client)
-        if rule.stack ~= nil then
-            client:set_stack(rule.stack)
-        else
-            client:set_floating(true)
-        end
-        if rule.icon ~= nil then
-            client:set_icon(rule.icon)
-        end
-        if rule.title ~= nil then
-            client:set_label(rule.title)
-        end
-        if rule.border ~= nil then
-            client:set_border(rule.border)
-        end
+        client:set_floating(rule.stack == nil)
+        if rule.stack then client:set_stack(rule.stack) end
+        if rule.icon then client:set_icon(rule.icon) end
+        if rule.title then client:set_label(rule.title) end
+        if rule.border then client:set_border(rule.border) end
+        if rule.module then client:set_modules(rule.module) end
     end)
 end
 
