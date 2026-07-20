@@ -3,7 +3,6 @@
 ## Install
 
 To install this just clone the repo and install it using zig build, the dependencies will be fetched with the repo.
-**NOTE: This currently requires zig 0.15+**
 
 ## About
 
