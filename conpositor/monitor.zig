@@ -95,20 +95,20 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
     }
 
     if (!output.commitState(&state)) {
-        std.log.err("initial output commit with preferred mode failed, trying all modes", .{});
+        std.log.err("Initial output commit with preferred mode failed, trying all modes", .{});
 
         var iter = output.modes.iterator(.forward);
         while (iter.next()) |mode| {
             state.setMode(mode);
             if (output.commitState(&state)) {
-                std.log.info("initial output commit succeeded with mode {}x{}@{}mHz", .{
+                std.log.info("Initial output commit succeeded with mode {}x{}@{}mHz", .{
                     mode.width,
                     mode.height,
                     mode.refresh,
                 });
                 break;
             } else {
-                std.log.err("initial output commit failed with mode {}x{}@{}mHz", .{
+                std.log.err("Initial output commit failed with mode {}x{}@{}mHz", .{
                     mode.width,
                     mode.height,
                     mode.refresh,
@@ -117,12 +117,12 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
         }
     }
 
-    std.log.info("Create monitor {s}", .{output.name});
-
     const scene_output = try session.scene.createSceneOutput(output);
 
     const result: *Monitor = try allocator.create(Monitor);
     output.data = @ptrCast(@alignCast(result));
+
+    std.log.debug("Created monitor {} for {s}", .{result, output.name});
 
     session.monitors.append(result);
 
@@ -145,7 +145,7 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
 
     const layout_output = try session.output_layout.add(result.output, result.mode.x, result.mode.y);
 
-    std.log.info("{}", .{layout_output});
+    std.log.debug("Output layout is {}", .{layout_output});
 
     result.scene_output.setPosition(layout_output.x, layout_output.y);
 

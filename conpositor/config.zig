@@ -164,11 +164,15 @@ const LuaClosure = struct {
 
     pub fn deinit(self: LuaClosure) void {
         self.lua.unref(zlua.registry_index, self.ref);
-        std.log.info("unref: {}", .{self.ref});
+        std.log.debug("Unref lua object {}", .{self.ref});
     }
 
     pub fn toLua(self: LuaClosure, lua: *Lua) void {
         _ = lua.getIndexRaw(zlua.registry_index, self.ref);
+    }
+    
+    pub fn format(self: LuaClosure, writer: *std.Io.Writer) !void {
+        try writer.print("Closure#{}", .{ self.ref });
     }
 
     pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !LuaClosure {
@@ -186,6 +190,8 @@ const LuaClosure = struct {
             _ = try lua.getUpvalue(index, @intCast(v)); // func table upv
             upvs[v - 1] = lua.ref(zlua.registry_index);
         }
+
+        std.log.debug("Ref lua Closure#{}", .{r});
 
         return .{
             .lua = lua,
@@ -283,7 +289,7 @@ pub const LuaModule = struct {
 
     const LuaMethods = struct {
         pub fn new(text: LuaClosure) LuaModule {
-            std.log.info("new module {}", .{text.ref});
+            std.log.debug("New lua bar module {f}", .{text.ref});
 
             return .{
                 .calls = text,
@@ -379,7 +385,6 @@ const LuaContainer = struct {
             self.children = try allocator.realloc(self.children, self.children.len + 1);
             self.children[self.children.len - 1] = container;
 
-            std.log.info("child: {}", .{self.children.len - 1});
             return .{ .child = container };
         }
     };
@@ -441,7 +446,7 @@ pub const LuaMonitor = struct {
         pub fn set_tag(self: *LuaMonitor, tag: *LuaTag) void {
             self.child.setActiveTag(tag.id);
 
-            std.log.info("set tag {}", .{tag.id});
+            std.log.debug("Set monitor {f} tag to {f}", .{self, tag});
         }
 
         pub fn get_layout(self: *LuaMonitor) ?LuaLayout {
@@ -451,9 +456,9 @@ pub const LuaMonitor = struct {
         }
 
         pub fn set_layout(self: *LuaMonitor, layout: LuaLayout) void {
-            std.log.info("set layout {}", .{layout});
-
             self.child.setLayout(layout.child);
+
+            std.log.debug("Set monitor {f} layout to {f}", .{self, layout});
         }
 
         pub fn set_inner_gaps(self: *LuaMonitor, size: i32) void {
@@ -552,7 +557,7 @@ const LuaClient = struct {
             self.child.setContainer(stack);
             self.child.setFloating(false);
 
-            std.log.info("set container {}", .{stack});
+            std.log.debug("Set client {f} stack to {f}", .{self, stack});
         }
 
         pub fn set_container(self: *LuaClient, container: *LuaContainer) void {
@@ -560,7 +565,7 @@ const LuaClient = struct {
                 self.child.setContainer(stack);
                 self.child.setFloating(false);
 
-                std.log.info("set container {}", .{stack});
+                std.log.debug("Set client {f} container to {f}", .{self, stack});
             }
         }
 
@@ -762,7 +767,7 @@ const LuaMethods = struct {
             .size = @intFromFloat(size),
         };
 
-        std.log.info("set font {f}", .{self.font});
+        std.log.debug("Set session font to {f}", .{self.font});
     }
 
     // TODO: move layout storage to lua
@@ -792,7 +797,7 @@ const LuaMethods = struct {
         const name_dup = try allocator.dupeZ(u8, name);
         try self.tags.append(name_dup);
 
-        std.log.info("create tag {s}", .{name_dup});
+        std.log.debug("Create session tag {s}", .{name_dup});
 
         return .{ .id = @intCast(self.tags.items.len - 1) };
     }
@@ -804,8 +809,6 @@ const LuaMethods = struct {
         var g: f32 = 1.0;
         var b: f32 = 1.0;
         var a: f32 = 1.0;
-
-        std.log.info("color_name {s}", .{color_name});
 
         if (color_name.len == 9) {
             if (color_name[0] != '#')
@@ -829,12 +832,12 @@ const LuaMethods = struct {
 
         const palette = std.meta.stringToEnum(PaletteColor, palette_name) orelse return error.BadLayer;
 
-        std.log.info("rgba for {} {}, {} {} {} {}", .{ active, palette, r, g, b, a });
-
         if (active)
             self.active_colors.set(palette, .{ r, g, b, a })
         else
             self.inactive_colors.set(palette, .{ r, g, b, a });
+
+        std.log.debug("Add color {s} to pallette {s} as the {s} color with rgba ({} {} {} {})", .{color_name, palette_name, if (active) "active" else "inactive", r, g, b, a });
 
         try session.reloadColors();
     }
@@ -869,7 +872,7 @@ const LuaMethods = struct {
             if (try self.binds.fetchPut(key, calls)) |value|
                 value.value.deinit();
 
-            std.log.info("create bind {f}", .{key});
+            std.log.debug("Created bind for {f} {f}", .{mods, key});
         }
 
         if (old_top != lua.getTop() + 0)
@@ -914,7 +917,7 @@ const LuaMethods = struct {
         if (try self.mouse_binds.fetchPut(key, calls)) |value|
             value.value.deinit();
 
-        std.log.info("set mouse bind {f}", .{key});
+        std.log.debug("Set mouse bind for {f}", .{key});
 
         if (old_top != lua.getTop() + 0)
             return error.LuaError;
@@ -1078,7 +1081,7 @@ pub fn setupLua(self: *Config) ConfigError!void {
             .max = original.max,
         };
         if (std.posix.setrlimit(.NOFILE, new)) {
-            std.log.info("raised file descriptor limit of the conpositor process to {d}", .{new.cur});
+            std.log.debug("raised file descriptor limit of the conpositor process to {d}", .{new.cur});
         } else |_| {
             std.log.err("setrlimit failed, using system default file descriptor limit of {d}", .{
                 original.cur,

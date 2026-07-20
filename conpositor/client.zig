@@ -11,7 +11,7 @@ const Tab = @import("tab.zig");
 
 const Client = @This();
 
-const ClientError = cairo.Error || error{TODO};
+const ClientError = cairo.Error;
 
 const allocator = Config.allocator;
 
@@ -268,14 +268,14 @@ pub fn init(session: *Session, target: ClientSurface) !void {
 
             client.* = .{ .surface = target, .session = session, .managed = true };
 
-            std.log.info("add xdg surface {*} to {*}", .{ target.XDG, client });
+            std.log.debug("Add xdg surface {*} to {*}", .{ target.XDG, client });
 
             surface.surface.events.commit.add(&client.events.commit_event);
             surface.surface.events.map.add(&client.events.map_event);
             surface.surface.events.unmap.add(&client.events.unmap_event);
             surface.surface.events.destroy.add(&client.events.deinit_event);
 
-            std.log.info("created client", .{});
+            std.log.debug("Created client {*}", .{ client });
 
             return;
         },
@@ -285,7 +285,7 @@ pub fn init(session: *Session, target: ClientSurface) !void {
 
             client.* = .{ .surface = target, .session = session, .managed = !surface.override_redirect };
 
-            std.log.info("add x11 surface {*} to {*}", .{ target.X11, client });
+            std.log.debug("Add x11 surface {*} to {*}", .{ target.X11, client });
 
             // used for reference when comparing to xcb names
             // https://github.com/swaywm/wlroots/blob/0855cdacb2eeeff35849e2e9c4db0aa996d78d10/include/wlr/xwayland.h#L143
@@ -297,7 +297,7 @@ pub fn init(session: *Session, target: ClientSurface) !void {
             surface.events.set_hints.add(&client.events.xevents.set_hints_event);
             surface.events.destroy.add(&client.events.xevents.deinit_event);
 
-            std.log.info("created x11 client", .{});
+            std.log.debug("Created x11 client {*}", .{ client });
         },
     }
 }
@@ -419,7 +419,7 @@ pub fn setContainer(self: *Client, container: u8) void {
 
     self.dirty.container = true;
 
-    std.log.info("set container: {}", .{self.container});
+    std.log.debug("Set container: {}", .{self.container});
 
     if (!self.floating) {
         var iter = self.session.clients.iterator(.forward);
@@ -535,7 +535,7 @@ pub fn isStopped(self: *Client) bool {
     return switch (self.surface) {
         .X11 => false,
         .XDG => {
-            // std.log.warn("TODO: check client stopped", .{});
+            std.log.warn("TODO: check client stopped", .{});
             return false;
         },
     };
@@ -657,7 +657,7 @@ fn updateSize(self: *Client) !void {
     if (!self.frame.is_init)
         return;
 
-    std.log.info("update size", .{});
+    std.log.debug("Update size of client {*}", .{self});
     defer self.dirty.size = false;
 
     self.resize_serial = self.updateSizeSerial();
@@ -726,7 +726,7 @@ fn updateFrame(self: *Client) !void {
     if (!self.frame.is_init)
         return;
 
-    std.log.info("update frame", .{});
+    std.log.debug("Update client frame {*}", .{self});
     defer self.dirty.frame = false;
 
     for (self.frame.shadow) |shadow|
@@ -813,7 +813,7 @@ fn updateTabs(self: *Client) !void {
 }
 
 fn updateTitles(self: *Client) !void {
-    std.log.info("update title", .{});
+    std.log.debug("Update client title {*}", .{self});
     defer self.dirty.title = false;
 
     var iter = self.session.clients.iterator(.forward);
@@ -829,7 +829,7 @@ fn updateVisible(self: *Client) !void {
         return;
     }
 
-    std.log.info("update visible", .{});
+    std.log.debug("Update client visible {*}", .{self});
     defer self.dirty.visible = false;
 
     self.scene.node.setEnabled(self.visible);
@@ -840,7 +840,7 @@ fn updateFloating(self: *Client) !void {
     if (self.fullscreen)
         return;
 
-    std.log.info("update floating", .{});
+    std.log.debug("Update client floating {*}", .{self});
     defer self.dirty.floating = false;
 
     const shadow_layer: Session.Layer = if (self.floating) .LyrFloatShadows else .LyrTileShadows;
@@ -876,7 +876,7 @@ fn updateFullscreen(self: *Client) !void {
 }
 
 fn updateTop(self: *Client) !void {
-    std.log.info("update top", .{});
+    std.log.debug("Update client to top", .{ self });
     defer self.dirty.top = false;
 
     try self.updateFrame();
@@ -907,7 +907,7 @@ fn setHints(self: *Client) !void {
 }
 
 fn map(self: *Client) !void {
-    std.log.info("map client {*}", .{self});
+    std.log.debug("Map client {*} with surface {f}", .{self, self.surface});
 
     self.scene = try self.session.layers.get(.LyrTile).createSceneTree();
 
@@ -945,8 +945,6 @@ fn map(self: *Client) !void {
     if (self.managed) {
         geom = self.applyBounds(geom, true);
     }
-
-    std.log.info("map client {*} surf {f}", .{ self, self.surface });
 
     if (self.managed)
         try self.session.focusClient(self, true)
@@ -1211,7 +1209,7 @@ fn unmap(self: *Client) !void {
     if (self == self.session.input.grab_client)
         _ = try self.session.input.endDrag();
 
-    std.log.info("unmap {*}", .{self});
+    std.log.debug("Unmap client {*}", .{self});
 
     if (self.monitor) |m| {
         m.dirty.tabs = true;
@@ -1222,7 +1220,6 @@ fn unmap(self: *Client) !void {
     try self.clearMonitor();
 
     if (self.frame.is_init) {
-        std.log.info("locks: {}", .{self.frame.title_buffer.base.n_locks});
         self.frame.title_buffer.base.unlock();
         self.frame.title_buffer.deinit();
 

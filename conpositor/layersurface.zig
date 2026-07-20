@@ -70,7 +70,7 @@ pub fn init(session: *Session, surf: *wlr.LayerSurfaceV1) !void {
         @as(*Monitor, @ptrCast(@alignCast(output.data)))
     else
         session.focusedMonitor orelse {
-            std.log.info("no focused monitor", .{});
+            std.log.debug("Failed to init surf {*}, no focused monitor", .{surf});
 
             surf.destroy();
             return;
@@ -108,7 +108,7 @@ pub fn init(session: *Session, surf: *wlr.LayerSurfaceV1) !void {
     try monitor.arrangeLayers();
     surf.current = old_state;
 
-    std.log.info("tracking surface {*} as {*}", .{ surf, result });
+    std.log.debug("Tracking layersurface {*} with {*}", .{ surf, result });
 }
 
 pub fn notifyEnter(self: *LayerSurface, seat: *wlr.Seat, kb: ?*wlr.Keyboard) void {
@@ -122,11 +122,11 @@ pub fn notifyEnter(self: *LayerSurface, seat: *wlr.Seat, kb: ?*wlr.Keyboard) voi
 fn map(self: *LayerSurface) !void {
     try self.session.input.motionNotify(0);
 
-    std.log.info("mapped {*}", .{self});
+    std.log.debug("Maped layer surface {*}", .{self});
 }
 
 fn commit(self: *LayerSurface) !void {
-    std.log.info("commiting {*}", .{self});
+    std.log.debug("Configure layer surface {*} on {*}", .{self, self.monitor});
 
     if (self.surface.output) |output| {
         self.monitor = @ptrCast(@alignCast(output.data));
@@ -134,8 +134,6 @@ fn commit(self: *LayerSurface) !void {
 
     if (self.monitor == null)
         return;
-
-    std.log.info("{*} is on {*}", .{ self, self.monitor });
 
     const lyr = self.session.layers.get(@enumFromInt(@intFromEnum(self.surface.current.layer)));
     if (lyr != self.scene_tree.node.parent) {
@@ -152,7 +150,6 @@ fn commit(self: *LayerSurface) !void {
         return;
 
     self.mapped = self.surface.surface.mapped;
-    std.log.info("{*} is mapped: {}", .{ self, self.mapped });
 
     if (self.monitor) |m|
         try m.arrangeLayers();
@@ -171,11 +168,11 @@ fn unmap(self: *LayerSurface) !void {
 
     try self.session.input.motionNotify(0);
 
-    std.log.info("unmapped {*}", .{self});
+    std.log.debug("Unmapped layer surface {*}", .{self});
 }
 
 fn deinit(self: *LayerSurface) void {
-    std.log.info("deinit {*}", .{self});
+    std.log.debug("Deinit layer surface {*}", .{self});
 
     self.link.remove();
 

@@ -23,9 +23,7 @@ const CursorMode = enum {
     lua,
 };
 
-const MotionError = error{
-    TODO,
-} || Config.ConfigError || cairo.Error;
+const MotionError = Config.ConfigError || cairo.Error;
 
 const xkb_rules: xkb.RuleNames = .{
     .options = null,

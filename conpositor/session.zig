@@ -109,13 +109,13 @@ const Events = struct {
         if (!wlr_output.initRender(self.wlr_allocator, self.renderer)) return;
 
         Monitor.init(self, wlr_output) catch {
-            std.log.err("failed to allocate new monitor", .{});
+            std.log.err("Failed to allocate new monitor", .{});
             wlr_output.destroy();
             return;
         };
 
         self.updateMons() catch |err| {
-            std.log.err("failed to update monitors {s}", .{@errorName(err)});
+            std.log.err("Failed to update monitors {s}", .{@errorName(err)});
         };
     }
 
@@ -124,7 +124,7 @@ const Events = struct {
         const self: *Session = @fieldParentPtr("events", events);
 
         self.outputManagerApply(true, output_configuration) catch |err| {
-            std.log.err("failed to update monitors {s}", .{@errorName(err)});
+            std.log.err("Failed to update monitors {s}", .{@errorName(err)});
         };
     }
 
@@ -133,7 +133,7 @@ const Events = struct {
         const self: *Session = @fieldParentPtr("events", events);
 
         self.outputManagerApply(false, output_configuration) catch |err| {
-            std.log.err("failed to update monitors {s}", .{@errorName(err)});
+            std.log.err("Failed to update monitors {s}", .{@errorName(err)});
         };
     }
 
@@ -142,7 +142,7 @@ const Events = struct {
         const self: *Session = @fieldParentPtr("events", events);
 
         self.xwayland_ready(self.xwayland.?) catch |err| {
-            std.log.err("failed to init server xwayland {}", .{err});
+            std.log.err("Failed to init server xwayland {}", .{err});
         };
         self.input.xwaylandReady(self.xwayland.?);
     }
@@ -159,7 +159,7 @@ const Events = struct {
         const self: *Session = @fieldParentPtr("events", events);
 
         self.newLayerSurfaceClient(xdg_layer_surface) catch |err| {
-            std.log.err("failed to init layer surface {}", .{err});
+            std.log.err("Failed to init layer surface {}", .{err});
         };
     }
 
@@ -167,10 +167,10 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xdg_popup_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
-        std.log.info("popup {*} {}", .{ xdg_surface.base, xdg_surface.base.role });
+        std.log.debug("Popup created {*}", .{ xdg_surface.base });
 
         self.newPopup(xdg_surface) catch |err| {
-            std.log.err("failed to init client {}", .{err});
+            std.log.err("Failed to init popup {}", .{err});
         };
     }
 
@@ -178,10 +178,10 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xdg_toplevel_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
-        std.log.info("toplevel {*} {}", .{ xdg_surface.base, xdg_surface.base.role });
+        std.log.debug("Toplevel created {*}", .{ xdg_surface.base });
 
         self.newClient(.{ .XDG = xdg_surface.base }) catch |err| {
-            std.log.err("failed to init toplevel client {}", .{err});
+            std.log.err("Failed to init Toplevel client {}", .{err});
         };
     }
 
@@ -189,10 +189,10 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xdg_surface_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
-        std.log.info("surface {*} {}", .{ xdg_surface, xdg_surface.role });
+        std.log.debug("LayerSurface created {*}", .{ xdg_surface.base });
 
         self.newClient(.{ .XDG = xdg_surface }) catch |err| {
-            std.log.err("failed to init client {}", .{err});
+            std.log.err("Failed to init LayerSurface {}", .{err});
         };
     }
 
@@ -200,8 +200,10 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xwayland_surface_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
+        std.log.debug("XwaylandSurface created {*}", .{ xdg_surface.base });
+
         self.newClient(.{ .X11 = xwayland_surface }) catch |err| {
-            std.log.err("failed to init client {}", .{err});
+            std.log.err("Failed to init Xwayland Client {}", .{err});
         };
     }
 
@@ -210,7 +212,7 @@ const Events = struct {
         const self: *Session = @fieldParentPtr("events", events);
 
         self.updateMons() catch |err| {
-            std.log.err("failed to init client {}", .{err});
+            std.log.err("Failed to init client {}", .{err});
         };
     }
 };
@@ -254,7 +256,7 @@ pub fn deinit(self: *Session) void {
 }
 
 fn outputManagerApply(self: *Session, is_test: bool, output_configuration: *wlr.OutputConfigurationV1) !void {
-    std.log.info("monitor manager apply test: {}", .{is_test});
+    std.log.debug("Monitor manager apply{s}", .{if (is_test) " dry" else ""});
 
     var ok = true;
 
@@ -296,7 +298,7 @@ fn outputManagerApply(self: *Session, is_test: bool, output_configuration: *wlr.
             else
                 wlr_output.commitState(&state);
 
-        std.log.info("move monitor {*}, {} {}", .{ monitor, monitor.mode, monitor.window });
+        std.log.debug("Move monitor {*} to {} {}", .{ monitor, monitor.mode, monitor.window });
     }
 
     if (ok) {
@@ -311,8 +313,6 @@ fn outputManagerApply(self: *Session, is_test: bool, output_configuration: *wlr.
 }
 
 fn newLayerSurfaceClient(self: *Session, surface: *wlr.LayerSurfaceV1) !void {
-    std.log.info("new layer surface {*}", .{surface});
-
     try LayerSurface.init(self, surface);
 }
 
@@ -333,7 +333,7 @@ fn commitPopup(listener: *wl.Listener(*wlr.Surface), surface: *wlr.Surface) void
     if (!popup.base.initial_commit)
         return;
 
-    std.log.info("commit popup {*}", .{popup});
+    std.log.debug("Configure popup {*}", .{popup});
 
     const objects = self.getSurfaceObjects(popup.base.surface);
     if (popup.parent == null or (objects.client == null and objects.layer_surface == null))
@@ -374,8 +374,6 @@ fn commitPopup(listener: *wl.Listener(*wlr.Surface), surface: *wlr.Surface) void
 }
 
 fn newClient(self: *Session, surface: Client.ClientSurface) !void {
-    std.log.info("process xdg surface create for {f}", .{surface});
-
     try Client.init(self, surface);
 }
 
@@ -653,7 +651,7 @@ pub fn launch(self: *Session) SessionError!void {
 }
 
 pub fn updateMons(self: *Session) !void {
-    std.log.info("update monitors", .{});
+    std.log.debug("Update monitors", .{});
 
     const config = try wlr.OutputConfigurationV1.create();
 
@@ -974,13 +972,13 @@ fn xwayland_ready(self: *Session, xwayland: *wlr.Xwayland) !void {
     const xc = c.xcb_connect(xwayland.display_name, null) orelse return;
     defer c.xcb_disconnect(xc);
     if (c.xcb_connection_has_error(xc) != 0) {
-        std.log.info("xcb_connect_failed", .{});
+        std.log.err("xcb connect failed", .{});
+    } else {
+        self.net_atoms.set(.window_type_dialog, getAtom(xc, "_NET_WM_WINDOW_TYPE_DIALOG"));
+        self.net_atoms.set(.window_type_splash, getAtom(xc, "_NET_WM_WINDOW_TYPE_SPLASH"));
+        self.net_atoms.set(.window_type_toolbar, getAtom(xc, "_NET_WM_WINDOW_TYPE_TOOLBAR"));
+        self.net_atoms.set(.window_type_utility, getAtom(xc, "_NET_WM_WINDOW_TYPE_UTILITY"));
     }
-
-    self.net_atoms.set(.window_type_dialog, getAtom(xc, "_NET_WM_WINDOW_TYPE_DIALOG"));
-    self.net_atoms.set(.window_type_splash, getAtom(xc, "_NET_WM_WINDOW_TYPE_SPLASH"));
-    self.net_atoms.set(.window_type_toolbar, getAtom(xc, "_NET_WM_WINDOW_TYPE_TOOLBAR"));
-    self.net_atoms.set(.window_type_utility, getAtom(xc, "_NET_WM_WINDOW_TYPE_UTILITY"));
 }
 
 pub fn focusMonitor(self: *Session, monitor: *Monitor) !void {
