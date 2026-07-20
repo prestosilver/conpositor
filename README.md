@@ -8,7 +8,7 @@ The full command I use is this:
 `zig build -p /usr -Doptimize=ReleaseFast`
 
 > [!WARNING]
-> Never copy past code from the internet. This command will install files directly to your /usr folder, If you want to inspect your build run zig build and look in the `zig-out` folder
+> Never copy past code from the internet. This command will install files directly to your /usr folder. If you want to inspect it's contents run zig build and look in the `zig-out` folder.
 
 ## About
 
