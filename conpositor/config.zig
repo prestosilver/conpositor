@@ -704,6 +704,7 @@ const LuaMethods = struct {
             return error.BadCycleDirection;
     }
 
+    // TODO: hide from lua
     fn spawnThread(self: *Config, name: [:0]const u8, args: [][*:0]const u8) void {
         const argv = allocator.alloc([]const u8, args.len + 1) catch unreachable;
         defer allocator.free(argv);
@@ -984,9 +985,10 @@ fn cleanupChild() void {
 }
 
 fn roFunction() !void {
-    return error.ReadOnlySet;
+    return error.AssignToReadOnly;
 }
 
+// TODO: Dont force snake case here
 inline fn globalType(lua: *Lua, comptime T: type, name: [:0]const u8) ConfigError!void {
     const info = @typeInfo(T.LuaMethods);
 
@@ -1074,7 +1076,7 @@ pub fn setupLua(self: *Config) ConfigError!void {
             .max = original.max,
         };
         if (std.posix.setrlimit(.NOFILE, new)) {
-            std.log.info("raised file descriptor limit of the river process to {d}", .{new.cur});
+            std.log.info("raised file descriptor limit of the conpositor process to {d}", .{new.cur});
         } else |_| {
             std.log.err("setrlimit failed, using system default file descriptor limit of {d}", .{
                 original.cur,

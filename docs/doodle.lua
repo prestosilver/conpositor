@@ -14,7 +14,7 @@ local terminal = "kitty"
 require("mondo.colors")
 
 -- setup libraries
-gaps.setup { inc = 2, toggle = true, value = 8, ratio = 2, outer = 30 }
+gaps.setup { toggle = true, value = 8, ratio = 2, outer = 30 }
 mouse.setup {}
 
 -- create my containers
@@ -189,9 +189,9 @@ end
 -- debug tools
 
 session:add_bind(super, "P", funcs.reload())
-session:add_bind(super, "G", gaps.increase)
-session:add_bind(super .. "S", "G", gaps.decrease)
-session:add_bind(super .. "S", "V", gaps.toggle)
+session:add_bind(super, "G", gaps.increase(2))
+session:add_bind(super .. "S", "G", gaps.decrease(2))
+session:add_bind(super .. "S", "V", gaps.toggle())
 
 -- title modules
 local icon_module = Module.new(function(client)
