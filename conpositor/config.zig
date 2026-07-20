@@ -22,6 +22,8 @@ pub const ConfigError = error{
     LuaRuntime,
 } || known_folders.Error;
 
+// TODO: replace catch lua.raiseErrorStr("Not a T", .{}); with a proper call like the auto lua to avoid inconsistency
+
 pub const allocator_data = if (@import("builtin").mode == .Debug) struct {
     var gpa: std.heap.DebugAllocator(.{
         .thread_safe = true,
@@ -840,7 +842,7 @@ const LuaMethods = struct {
     pub fn raw_add_bind(lua: *Lua) !i32 {
         const old_top = lua.getTop();
 
-        const self = lua.toAny(*Config, -4) catch lua.raiseErrorStr("Not a Config", .{});
+        const self = lua.toAny(*Config, -4) catch lua.raiseErrorStr("Not a Session", .{});
         const mod_names = lua.toString(-3) catch lua.raiseErrorStr("Not a string", .{});
         const key_name = lua.toString(-2) catch lua.raiseErrorStr("Not a string", .{});
         const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
@@ -879,7 +881,7 @@ const LuaMethods = struct {
     pub fn raw_add_mouse(lua: *Lua) !i32 {
         const old_top = lua.getTop();
 
-        const self = lua.toAny(*Config, -4) catch lua.raiseErrorStr("Not a Config", .{});
+        const self = lua.toAny(*Config, -4) catch lua.raiseErrorStr("Not a Session", .{});
         const mod_names = lua.toString(-3) catch lua.raiseErrorStr("Mods not a string", .{});
         const key_name = lua.toString(-2) catch lua.raiseErrorStr("Button not a string", .{});
         const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
@@ -923,7 +925,7 @@ const LuaMethods = struct {
     pub fn raw_add_rule(lua: *Lua) !i32 {
         const old_top = lua.getTop();
 
-        const self = lua.toAny(*Config, -3) catch lua.raiseErrorStr("Not a Config", .{});
+        const self = lua.toAny(*Config, -3) catch lua.raiseErrorStr("Not a Session", .{});
         const filter = lua.toAny(LuaFilter, -2) catch lua.raiseErrorStr("Not a lua filter", .{});
         const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
         errdefer calls.deinit();
@@ -942,7 +944,7 @@ const LuaMethods = struct {
     pub fn raw_add_hook(lua: *Lua) !i32 {
         const old_top = lua.getTop();
 
-        const self = lua.toAny(*Config, -3) catch lua.raiseErrorStr("Not a Config", .{});
+        const self = lua.toAny(*Config, -3) catch lua.raiseErrorStr("Not a Session", .{});
         const event_name = lua.toString(-2) catch lua.raiseErrorStr("Not a string", .{});
         const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
         errdefer calls.deinit();
