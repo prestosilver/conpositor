@@ -1,23 +1,12 @@
 const std = @import("std");
 const Scanner = @import("wayland").Scanner;
 
-// Although this function looks imperative, note that its job is to
-// declaratively construct a build graph that will be executed by an external
-// runner.
 pub fn build(b: *std.Build) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
     const target = b.standardTargetOptions(.{});
-
-    // Standard optimization options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
-    // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    // Wayland protocols to zig
     const scanner = Scanner.create(b, .{});
-
     scanner.addSystemProtocol("stable/xdg-shell/xdg-shell.xml");
     scanner.addSystemProtocol("stable/tablet/tablet-v2.xml");
     scanner.addSystemProtocol("staging/cursor-shape/cursor-shape-v1.xml");
@@ -31,10 +20,6 @@ pub fn build(b: *std.Build) void {
     scanner.addCustomProtocol(b.path("protocol/wlr-layer-shell-unstable-v1.xml"));
 
     // Some of these versions may be out of date with what wlroots implements.
-    // This is not a problem in practice though as long as tinywl successfully compiles.
-    // These versions control Zig code generation and have no effect on anything internal
-    // to wlroots. Therefore, the only thing that can happen due to a version being too
-    // old is that tinywl fails to compile.
     scanner.generate("wl_compositor", 4);
     scanner.generate("wl_subcompositor", 1);
     scanner.generate("wl_shm", 1);
@@ -52,7 +37,6 @@ pub fn build(b: *std.Build) void {
     scanner.generate("wp_tearing_control_manager_v1", 1);
 
     scanner.generate("zwlr_layer_shell_v1", 4);
-
     scanner.generate("conpositor_ipc_manager_v1", 1);
 
     const wayland_mod = b.createModule(.{
@@ -61,6 +45,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // external mods
     const xkbcommon_dep = b.dependency("xkbcommon", .{});
     const known_folders_dep = b.dependency("known_folders", .{});
     const pixman_dep = b.dependency("pixman", .{});
@@ -75,13 +60,11 @@ pub fn build(b: *std.Build) void {
     wlroots_dep.module("wlroots").addImport("xkbcommon", xkbcommon_dep.module("xkbcommon"));
     wlroots_dep.module("wlroots").addImport("pixman", pixman_dep.module("pixman"));
 
-    // We need to ensure the wlroots include path obtained from pkg-config is
-    // exposed to the wlroots module for @cImport() to work. This seems to be
-    // the best way to do so with the current std.Build API.
     wlroots_dep.module("wlroots").resolved_target = target;
     wlroots_dep.module("wlroots").optimize = optimize;
     wlroots_dep.module("wlroots").linkSystemLibrary("wlroots-0.20", .{});
 
+    // Conpositor its self
     const conpositor = b.addExecutable(.{
         .name = "conpositor",
         .root_module = b.createModule(.{
@@ -137,26 +120,14 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(conpositormsg);
 
-    // This *creates* a Run step in the build graph, to be executed when another
-    // step is evaluated that depends on it. The next line below will establish
-    // such a dependency.
+    // run step
     const run_cmd = b.addRunArtifact(conpositor);
     run_cmd.step.dependOn(b.getInstallStep());
 
-    run_cmd.setEnvironmentVariable(
-        "CONPOSITOR_LIB_DIR",
-        b.getInstallPath(.lib, ""),
-    );
+    run_cmd.setEnvironmentVariable("CONPOSITOR_LIB_DIR", b.getInstallPath(.lib, ""));
 
-    // This allows the user to pass arguments to the application in the build
-    // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    if (b.args) |args| run_cmd.addArgs(args);
 
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build run`
-    // This will evaluate the `run` step rather than the default, which is "install".
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
@@ -164,11 +135,9 @@ pub fn build(b: *std.Build) void {
     const run_msg = b.addRunArtifact(conpositormsg);
     run_msg.step.dependOn(b.getInstallStep());
 
-    if (b.args) |args| {
-        run_msg.addArgs(args);
-    }
+    if (b.args) |args| run_msg.addArgs(args);
 
-    const run_msg_step = b.step("runmsg", "Run the app");
+    const run_msg_step = b.step("runmsg", "Run the messager app");
     run_msg_step.dependOn(&run_msg.step);
 
     // Creates a step for unit testing. This only builds the test executable
@@ -180,11 +149,18 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    const run_conpositor_unit_tests = b.addRunArtifact(conpositor_unit_tests);
+    const conpositor_msg_unit_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("conpositormsg/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
 
-    // Similar to creating the run step earlier, this exposes a `test` step to
-    // the `zig build --help` menu, providing a way for the user to request
-    // running the unit tests.
+    const run_conpositor_unit_tests = b.addRunArtifact(conpositor_unit_tests);
+    const run_conpositor_msg_unit_tests = b.addRunArtifact(conpositor_msg_unit_tests);
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_conpositor_unit_tests.step);
+    test_step.dependOn(&run_conpositor_msg_unit_tests.step);
 }
