@@ -1,6 +1,6 @@
-gaps = require("conpositor.gaps")   -- A gap utility library
-funcs = require("conpositor.funcs") -- Helper functions for bindings
-mouse = require("conpositor.mouse") -- Some usual mouse binds so you dont have to implement them
+local gaps = require("conpositor.gaps")   -- A gap utility library
+local funcs = require("conpositor.funcs") -- Helper functions for bindings
+local mouse = require("conpositor.mouse") -- Some usual mouse binds so you dont have to implement them
 
 -- add an escape first in case of a lua crash
 session:add_bind("AS", "Escape", funcs.quit())
@@ -20,8 +20,8 @@ gaps.setup { inc = 2, toggle = true, value = 8, ratio = 2, outer = 30 }
 mouse.setup {}
 
 -- Create default tags
-stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
-tags = { session:new_tag("F1"), session:new_tag("F2"), session:new_tag("F3"), session:new_tag("F4") }
+local stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
+local tags = { session:new_tag("F1"), session:new_tag("F2"), session:new_tag("F3"), session:new_tag("F4") }
 
 -- Create default layouts
 local function setup_abcd(root_container, ab_split, in_ac_split, in_bd_split, flip)
@@ -90,7 +90,7 @@ local mouse_client = nil
 local mouse_client_position = {}
 local mouse_floating = false
 
-mouse_resize = {}
+local mouse_resize = {}
 mouse_resize.start = function(client, position)
     mouse_client = client
     mouse_client_position = client:get_position()
@@ -102,7 +102,7 @@ mouse_resize.move = function(position)
     mouse_client:set_position(mouse_client_position)
 end
 
-mouse_move = {}
+local mouse_move = {}
 mouse_move.start = function(client, position)
     mouse_client = client
     mouse_floating = client:get_floating()
@@ -112,7 +112,6 @@ mouse_move.start = function(client, position)
         mouse_client_position.y = mouse_client_position.y - position.y
     end
 end
-
 mouse_move.move = function(position)
     if mouse_floating then
         local pos = {}

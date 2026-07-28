@@ -1,7 +1,7 @@
 -- require some builtin libraries
-gaps = require("conpositor.gaps")
-funcs = require("conpositor.funcs")
-mouse = require("conpositor.mouse")
+local gaps = require("conpositor.gaps")
+local funcs = require("conpositor.funcs")
+local mouse = require("conpositor.mouse")
 
 -- add this first in case of crash
 session:add_bind("AS", "Escape", funcs.quit())
@@ -18,8 +18,8 @@ gaps.setup { toggle = true, value = 8, ratio = 2, outer = 30 }
 mouse.setup {}
 
 -- create my containers
-stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
-tags = { f1 = 1, f2 = 2, f3 = 3, f4 = 4 }
+local stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
+local tags = { f1 = 1, f2 = 2, f3 = 3, f4 = 4 }
 
 local function setup_abcd(root_container, ab_split, in_ac_split, in_bd_split, flip)
     local ac_split = in_ac_split
@@ -82,7 +82,8 @@ local flip_cycle = {
 local mouse_client = nil
 local mouse_client_position = {}
 local mouse_floating = false
-mouse_resize = {}
+
+local mouse_resize = {}
 mouse_resize.start = function(client, position)
     mouse_client = client
     mouse_client_position = client:get_position()
@@ -94,7 +95,7 @@ mouse_resize.move = function(position)
     mouse_client:set_position(mouse_client_position)
 end
 
-mouse_move = {}
+local mouse_move = {}
 mouse_move.start = function(client, position)
     mouse_client = client
     mouse_floating = client:get_floating()
