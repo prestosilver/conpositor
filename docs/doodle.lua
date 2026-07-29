@@ -42,32 +42,37 @@ end
 
 -- setup the base split system
 local function setup_abcd(layout, ab_split, in_ac_split, in_bd_split, flip)
-    local root_container = session:get_layout_root(layout)
-    
     local ac_split = flip and in_bd_split or in_ac_split
     local bd_split = flip and in_ac_split or in_bd_split
 
-    local bd_container = root_container:add_child(ab_split, 0.0, 1.0, 1.0)
-    local ac_container = root_container:add_child(0.0, 0.0, ab_split, 1.0)
-
-    local b_container = bd_container:add_child(0.0, 0.0, 1.0, bd_split)
-    local d_container = bd_container:add_child(0.0, bd_split, 1.0, 1.0)
-
-    local a_container = ac_container:add_child(0.0, 0.0, 1.0, ac_split)
-    local c_container = ac_container:add_child(0.0, ac_split, 1.0, 1.0)
-    if flip then
-        a_container:set_stack(stacks.b)
-        b_container:set_stack(stacks.a)
-
-        c_container:set_stack(stacks.d)
-        d_container:set_stack(stacks.c)
-    else
-        a_container:set_stack(stacks.a)
-        b_container:set_stack(stacks.b)
-
-        c_container:set_stack(stacks.c)
-        d_container:set_stack(stacks.d)
-    end
+    session.layouts[layout].children = {
+        { -- bd
+            bounds = {ab_split, 0.0, 1.0, 1.0},
+            children = {
+                { -- b
+                    bounds = {0.0, 0.0, 1.0, bd_split},
+                    container = flip and stacks.d or stacks.b
+                },
+                { -- d
+                    bounds = {0.0, bd_split, 1.0, 1.0},
+                    container = flip and stacks.b or stacks.d
+                }
+            }
+        },
+        { -- ac
+            bounds = {0.0, 0.0, ab_split, 1.0},
+            children = {
+                { -- a
+                    bounds = {0.0, 0.0, 1.0, ac_split},
+                    container = flip and stacks.c or stacks.a
+                },
+                { -- c
+                    bounds = {0.0, ac_split, 1.0, 1.0},
+                    container = flip and stacks.a or stacks.c
+                }
+            }
+        }
+    }
 end
 
 local align_cycle = {{ }, { }}
@@ -106,21 +111,21 @@ local mouse_floating = false
 local mouse_resize = {}
 mouse_resize.start = function(client, position)
     mouse_client = client
-    mouse_client_position = client:get_position()
+    mouse_client_position = client.position
 end
 mouse_resize.move = function(position)
     mouse_client_position.width = position.x - mouse_client_position.x
     mouse_client_position.height = position.y - mouse_client_position.y
 
-    mouse_client:set_position(mouse_client_position)
+    mouse_client.position = mouse_client_position
 end
 
 local mouse_move = {}
 mouse_move.start = function(client, position)
     mouse_client = client
-    mouse_floating = client:get_floating()
+    mouse_floating = client.floating
     if mouse_floating then
-        mouse_client_position = client:get_position()
+        mouse_client_position = client.position
         mouse_client_position.x = mouse_client_position.x - position.x
         mouse_client_position.y = mouse_client_position.y - position.y
     end
@@ -133,22 +138,22 @@ mouse_move.move = function(position)
         pos.width = mouse_client_position.width
         pos.height = mouse_client_position.height
 
-        mouse_client:set_position(pos)
+        mouse_client.position = pos
     else
         local monitor = session:active_monitor()
-        local size = monitor:get_size()
-        mouse_client:set_monitor(monitor)
+        local size = monitor.size
+        mouse_client.monitor = monitor
         if position.y - size.y < 0.5 * size.height then
             if position.x - size.x < 0.5 * size.width then
-                mouse_client:set_stack(stacks.a)
+                mouse_client.stack = stacks.a
             else
-                mouse_client:set_stack(stacks.b)
+                mouse_client.stack = stacks.b
             end
         else
             if position.x - size.x < 0.5 * size.width then
-                mouse_client:set_stack(stacks.c)
+                mouse_client.stack = stacks.c
             else
-                mouse_client:set_stack(stacks.d)
+                mouse_client.stack = stacks.d
             end
         end
     end
@@ -157,19 +162,19 @@ end
 -- title modules
 local icon_module = {}
 icon_module.text = function(client)
-    return client:get_icon() or ""
+    return client.icon or ""
 end
 
 local title_module = {}
 title_module.text = function(client)
-    return client:get_label() or client:get_title() or ""
+    return client.label or client.title or ""
 end
 
 local debug_module = {}
 debug_module.text = function(client)
-    local label = client:get_label() or "(none)"
-    local title = client:get_title() or "(none)"
-    local appid = client:get_appid() or "(none)"
+    local label = client.label or "(none)"
+    local title = client.title or "(none)"
+    local appid = client.appid or "(none)"
     return "[" .. label .. "] title: '" .. title .. "' appid: '" .. appid .. "'"
 end
 
@@ -200,7 +205,7 @@ local function debug_window_set(value)
     return function()
         local client = session:active_client()
         if client then
-            client:set_modules(modules)
+            client.modules = modules
         end
     end
 end
@@ -213,7 +218,7 @@ end
 
 local layout_module = {}
 layout_module.text = function(monitor)
-    return layout_names[session:get_active_layout()]
+    return layout_names[session:get_active_monitor().layout]
 end
 
 local active_client_module = {}
@@ -221,7 +226,7 @@ active_client_module.palette = mondo.inactive
 active_client_module.text = function(monitor)
     local client = monitor:get_active_client()
     if client then
-        return client:get_title() .. client:get_icon()
+        return client.title .. client.icon
     else
         return "Desktop"
     end
@@ -229,7 +234,7 @@ end
 
 local active_tag_module = {}
 active_tag_module.text = function(monitor)
-    return get_tag_name()
+    return "F" .. session:get_active_monitor().tag
 end
 
 local default_bars = {
@@ -305,13 +310,13 @@ session:add_bind(super, "L", debug_window_set(true))
 
 -- default rule
 session:add_rule({}, function(client)
-    client:set_modules(default_modules)
-    client:set_stack(stacks.c)
-    client:set_floating(true)
-    client:set_icon("?")
-    client:set_border(3)
-    client:set_palette("active", mondo.active)
-    client:set_palette("inactive", mondo.inactive)
+    client.modules = default_modules
+    client.stack = stacks.c
+    client.floating = true
+    client.icon = "?"
+    client.border = 3
+    client.palette["active"] = mondo.active
+    client.palette["inactive"] = mondo.inactive
 end)
 
 -- More specific rules
@@ -319,12 +324,12 @@ local function client_rule(filter, rule)
     local filter = filter
     local rule = rule
     session:add_rule(filter, function(client)
-        client:set_floating(rule.stack == nil)
-        if rule.stack then client:set_stack(rule.stack) end
-        if rule.icon then client:set_icon(rule.icon) end
-        if rule.title then client:set_label(rule.title) end
-        if rule.border then client:set_border(rule.border) end
-        if rule.module then client:set_modules(rule.module) end
+        client.floating = rule.stack == nil
+        if rule.stack then client.stack = rule.stack end
+        if rule.icon then client.icon = rule.icon end
+        if rule.title then client.label = rule.title end
+        if rule.border then client.border = rule.border end
+        if rule.module then client.modules =  rule.module end
     end)
 end
 
@@ -364,8 +369,8 @@ session:add_hooks {
     end
 
     add_monitor = function(monitor)
-        monitor:set_layout(default_layout)
-        monitor:set_bars(default_bars)
+        monitor.layout = default_layout
+        monitor.bars = default_bars
     end
 }
 
