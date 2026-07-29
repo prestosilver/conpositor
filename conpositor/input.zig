@@ -8,6 +8,7 @@ const c = @import("c.zig").c;
 const Session = @import("session.zig");
 const Client = @import("client.zig");
 const Config = @import("config.zig");
+const Monitor = @import("monitor.zig");
 
 const Input = @This();
 
@@ -88,6 +89,11 @@ const Events = struct {
     cursor_frame_event: wl.Listener(*wlr.Cursor) = .init(Events.cursorFrame),
     create_pointer_constraint_event: wl.Listener(*wlr.PointerConstraintV1) = .init(Events.createPointerConstraint),
 
+    cursor_touch_down_event: wl.Listener(*wlr.Touch.event.Down) = .init(Events.cursorTouchDown),
+    cursor_touch_up_event: wl.Listener(*wlr.Touch.event.Up) = .init(Events.cursorTouchUp),
+    cursor_touch_frame_event: wl.Listener(void) = .init(Events.cursorTouchFrame),
+    cursor_touch_motion_event: wl.Listener(*wlr.Touch.event.Motion) = .init(Events.cursorTouchMotion),
+
     request_set_cursor_event: wl.Listener(*wlr.Seat.event.RequestSetCursor) = .init(Events.requestSetCursor),
     set_cursor_shape_event: wl.Listener(*wlr.CursorShapeManagerV1.event.RequestSetShape) = .init(Events.setCursorShape),
     request_set_primary_selection: wl.Listener(*wlr.Seat.event.RequestSetPrimarySelection) = .init(Events.setPrimarySelection),
@@ -136,6 +142,42 @@ const Events = struct {
         const self: *Input = @fieldParentPtr("events", events);
 
         self.cursorFrame() catch |ex| {
+            @panic(@errorName(ex));
+        };
+    }
+
+    fn cursorTouchDown(listener: *wl.Listener(*wlr.Touch.event.Down), data: *wlr.Touch.event.Down) void {
+        const events: *Events = @fieldParentPtr("cursor_touch_down_event", listener);
+        const self: *Input = @fieldParentPtr("events", events);
+
+        self.cursorTouchDown(data) catch |ex| {
+            @panic(@errorName(ex));
+        };
+    }
+
+    fn cursorTouchUp(listener: *wl.Listener(*wlr.Touch.event.Up), data: *wlr.Touch.event.Up) void {
+        const events: *Events = @fieldParentPtr("cursor_touch_up_event", listener);
+        const self: *Input = @fieldParentPtr("events", events);
+
+        self.cursorTouchUp(data) catch |ex| {
+            @panic(@errorName(ex));
+        };
+    }
+
+    fn cursorTouchFrame(listener: *wl.Listener(void)) void {
+        const events: *Events = @fieldParentPtr("cursor_touch_frame_event", listener);
+        const self: *Input = @fieldParentPtr("events", events);
+
+        self.cursorTouchFrame() catch |ex| {
+            @panic(@errorName(ex));
+        };
+    }
+
+    fn cursorTouchMotion(listener: *wl.Listener(*wlr.Touch.event.Motion), data: *wlr.Touch.event.Motion) void {
+        const events: *Events = @fieldParentPtr("cursor_touch_motion_event", listener);
+        const self: *Input = @fieldParentPtr("events", events);
+
+        self.cursorTouchMotion(data) catch |ex| {
             @panic(@errorName(ex));
         };
     }
@@ -197,6 +239,28 @@ fn cleanMask(mask: wlr.Keyboard.ModifierMask) wlr.Keyboard.ModifierMask {
 
     return mask;
 }
+
+const Touch = struct {
+    link: wl.list.Link = undefined,
+    events: Touch.Events = .{},
+    touch: *wlr.Touch,
+    monitor: ?*const Monitor,
+
+    const Events = struct {};
+
+    pub fn init(input: *Input, device: *wlr.InputDevice) !*Touch {
+        const self = try allocator.create(Touch);
+        self.* = .{
+            .touch = @fieldParentPtr("base", device),
+            .monitor = null,
+        };
+
+        wlr.Cursor.attachInputDevice(input.cursor, device);
+        input.touches.append(self);
+
+        return self;
+    }
+};
 
 const Keyboard = struct {
     session: *Session,
@@ -377,6 +441,7 @@ active_constraint: ?*wlr.PointerConstraintV1 = null,
 relative_pointer_manager: *wlr.RelativePointerManagerV1 = undefined,
 
 keyboards: wl.list.Head(Keyboard, .link) = undefined,
+touches: wl.list.Head(Touch, .link) = undefined,
 locked: bool = false,
 
 grab_client: ?*Client = null,
@@ -392,6 +457,11 @@ pub fn init(self: *Input, session: *Session) !void {
     cursor.events.button.add(&self.events.cursor_button_event);
     cursor.events.axis.add(&self.events.cursor_axis_event);
     cursor.events.frame.add(&self.events.cursor_frame_event);
+
+    cursor.events.touch_down.add(&self.events.cursor_touch_down_event);
+    cursor.events.touch_frame.add(&self.events.cursor_touch_frame_event);
+    cursor.events.touch_motion.add(&self.events.cursor_touch_motion_event);
+    cursor.events.touch_up.add(&self.events.cursor_touch_up_event);
 
     const cursor_shape_manager = try wlr.CursorShapeManagerV1.create(session.server, 1);
     cursor_shape_manager.events.request_set_shape.add(&self.events.set_cursor_shape_event);
@@ -424,6 +494,7 @@ pub fn init(self: *Input, session: *Session) !void {
     };
 
     self.keyboards.init();
+    self.touches.init();
 }
 
 pub fn xwaylandReady(self: *Input, xwayland: *wlr.Xwayland) void {
@@ -647,6 +718,9 @@ fn keyRepeat(keyboard: *Keyboard) c_int {
 
 fn newInput(self: *Input, device: *wlr.InputDevice) !void {
     switch (device.type) {
+        .touch => {
+            self.touches.append(try .init(self, device));
+        },
         .keyboard => {
             self.keyboards.append(try .init(self, device));
         },
@@ -699,6 +773,42 @@ fn newInput(self: *Input, device: *wlr.InputDevice) !void {
     };
     if (!self.keyboards.empty())
         caps.keyboard = true;
+    if (!self.touches.empty())
+        caps.touch = true;
 
     self.seat.setCapabilities(caps);
+}
+
+fn cursorTouchDown(self: *Input, event: *wlr.Touch.event.Down) !void {
+    self.session.idle_notifier.notifyActivity(self.session.input.seat);
+
+    const device: *wlr.Touch = @fieldParentPtr("base", event.device);
+
+    var iter = self.session.monitors.iterator(.forward);
+    while (iter.next()) |monitor| {
+        if (!std.mem.eql(u8, std.mem.span(device.output_name), std.mem.span(monitor.output.name)))
+            continue;
+
+        self.cursor.mapInputToOutput(&device.base, monitor.output);
+    }
+
+    var lx: f64 = undefined;
+    var ly: f64 = undefined;
+    self.cursor.absoluteToLayoutCoords(&device.base, event.x, event.y, &lx, &ly);
+
+    _ = self.session.getObjectsAt(lx, ly);
+}
+
+fn cursorTouchUp(self: *Input, event: *wlr.Touch.event.Up) !void {
+    _ = self;
+    _ = event;
+}
+
+fn cursorTouchMotion(self: *Input, event: *wlr.Touch.event.Motion) !void {
+    _ = self;
+    _ = event;
+}
+
+fn cursorTouchFrame(self: *Input) !void {
+    _ = self;
 }
