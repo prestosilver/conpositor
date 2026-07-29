@@ -17,6 +17,12 @@ require("mondo.colors")
 gaps.setup { toggle = true, value = 8, ratio = 2, outer = 30 }
 mouse.setup {}
 
+-- set my super key
+local super = "L"
+if force_debug or session.is_debug() then
+    super = "A"
+end
+
 -- create my containers
 local stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
 local tags = { f1 = 1, f2 = 2, f3 = 3, f4 = 4 }
@@ -140,66 +146,6 @@ mouse_move.move = function(position)
     end
 end
 
-local super = "L"
-if force_debug or session.is_debug() then
-    super = "A"
-end
-
--- mousebinds
-mouse:add_bind("resize", mouse_resize)
-mouse:add_bind("move", mouse_move)
-
-session:add_mouse(super, "Left", mouse.bind("move"))
-session:add_mouse(super, "Right", mouse.bind("resize"))
-
--- programs
-session:add_bind(super, "Return", funcs.spawn(terminal, { "--class=termA" }))
-session:add_bind(super .. "S", "Return", funcs.spawn(terminal, { "--class=termB" }))
-session:add_bind(super .. "C", "Return", funcs.spawn(terminal, { "--class=termB" }))
-session:add_bind(super, "I", funcs.spawn(terminal, { "--class=htop", "-e", "htop" }))
-session:add_bind(super, "M", funcs.spawn(terminal, { "--class=music", "-e", "kew" }))
-session:add_bind(super, "R", funcs.spawn(terminal, { "--class=filesD", "-e", "ranger" }))
-session:add_bind(super .. "S", "R", funcs.spawn(terminal, { "--class=filesB", "-e", "ranger" }))
-session:add_bind(super, "V", funcs.spawn(terminal, { "--class=cava", "-e", "cava" }))
-
-session:add_bind(super .. "S", "S", funcs.spawn("ss.sh", {}))
-session:add_bind(super, "W", funcs.spawn("vivaldi", { "--ozone-platform=wayland" }))
-session:add_bind(super, "A", funcs.spawn("pavucontrol", {}))
-
--- launchers
-session:add_bind(super, "D", funcs.spawn("bemenu-launcher", {}))
-session:add_bind(super .. "S", "D", funcs.spawn("j4-dmenu-desktop", { "--dmenu=menu" }))
-session:add_bind(super .. "S", "W", funcs.spawn("bwpcontrol", { "menu" }))
-session:add_bind(super, "T", funcs.spawn("mondocontrol", { "menu" }))
-
--- misc session mgmt
-session:add_bind(super, "H", funcs.cycle_layout(1, lefty_cycle))
-session:add_bind(super .. "S", "H", funcs.cycle_layout(1, flip_cycle))
-session:add_bind(super, "Tab", funcs.cycle_focus(1))
-session:add_bind(super .. "S", "Tab", funcs.cycle_focus(-1))
-session:add_bind(super, "Space", funcs.toggle_floating())
-session:add_bind(super .. "S", "Escape", funcs.quit())
-session:add_bind(super, "Q", funcs.kill_client())
-session:add_bind(super, "F", funcs.toggle_fullscreen())
-
--- tags
-for name, tag in pairs(tags) do
-    session:add_bind(super, "F" .. tag, funcs.set_monitor_tag(tag))
-    session:add_bind(super .. "S", "F" .. tag, funcs.set_client_tag(tag))
-end
-
--- stacks
-for name, stack in pairs(stacks) do
-    session:add_bind(super .. "S", "" .. stack, funcs.set_client_stack(stack))
-end
-
--- debug tools
-
-session:add_bind(super, "P", funcs.reload())
-session:add_bind(super, "G", gaps.increase(2))
-session:add_bind(super .. "S", "G", gaps.decrease(2))
-session:add_bind(super .. "S", "V", gaps.toggle())
-
 -- title modules
 local icon_module = {}
 icon_module.text = function(client)
@@ -262,6 +208,11 @@ end
 local time_module = {}
 time_module.text = function(monitor) return "TIME O CLOCK" end
 
+local layout_module = {}
+layout_module.text = function(monitor)
+    return layout_names[session:get_active_layout()]
+end
+
 local active_client_module = {}
 active_client_module.text = function(monitor)
     local client = monitor:get_active_client()
@@ -272,16 +223,74 @@ active_client_module.text = function(monitor)
     end
 end
 
+local tag_module = {}
+tag_module.text = function(monitor)
+    return get_tag_name()
+end
+
 session:add_hook("add_monitor", function(monitor)
     monitor:set_bars({
         top = {
-            left = { time_module },
+            left = { layout_module, tag_module,  },
             center = { active_client_module },
-            right = { }
+            right = { time_module }
         }
     })
 end)
 
+-- mousebinds
+mouse:add_bind("resize", mouse_resize)
+mouse:add_bind("move", mouse_move)
+
+session:add_mouse(super, "Left", mouse.bind("move"))
+session:add_mouse(super, "Right", mouse.bind("resize"))
+
+-- programs
+session:add_bind(super, "Return", funcs.spawn(terminal, { "--class=termA" }))
+session:add_bind(super .. "S", "Return", funcs.spawn(terminal, { "--class=termB" }))
+session:add_bind(super .. "C", "Return", funcs.spawn(terminal, { "--class=termB" }))
+session:add_bind(super, "I", funcs.spawn(terminal, { "--class=htop", "-e", "htop" }))
+session:add_bind(super, "M", funcs.spawn(terminal, { "--class=music", "-e", "kew" }))
+session:add_bind(super, "R", funcs.spawn(terminal, { "--class=filesD", "-e", "ranger" }))
+session:add_bind(super .. "S", "R", funcs.spawn(terminal, { "--class=filesB", "-e", "ranger" }))
+session:add_bind(super, "V", funcs.spawn(terminal, { "--class=cava", "-e", "cava" }))
+
+session:add_bind(super .. "S", "S", funcs.spawn("ss.sh", {}))
+session:add_bind(super, "W", funcs.spawn("vivaldi", { "--ozone-platform=wayland" }))
+session:add_bind(super, "A", funcs.spawn("pavucontrol", {}))
+
+-- launchers
+session:add_bind(super, "D", funcs.spawn("bemenu-launcher", {}))
+session:add_bind(super .. "S", "D", funcs.spawn("j4-dmenu-desktop", { "--dmenu=menu" }))
+session:add_bind(super .. "S", "W", funcs.spawn("bwpcontrol", { "menu" }))
+session:add_bind(super, "T", funcs.spawn("mondocontrol", { "menu" }))
+
+-- misc session mgmt
+session:add_bind(super, "H", funcs.cycle_layout(1, lefty_cycle))
+session:add_bind(super .. "S", "H", funcs.cycle_layout(1, flip_cycle))
+session:add_bind(super, "Tab", funcs.cycle_focus(1))
+session:add_bind(super .. "S", "Tab", funcs.cycle_focus(-1))
+session:add_bind(super, "Space", funcs.toggle_floating())
+session:add_bind(super .. "S", "Escape", funcs.quit())
+session:add_bind(super, "Q", funcs.kill_client())
+session:add_bind(super, "F", funcs.toggle_fullscreen())
+
+-- tags
+for name, tag in pairs(tags) do
+    session:add_bind(super, "F" .. tag, funcs.set_monitor_tag(tag))
+    session:add_bind(super .. "S", "F" .. tag, funcs.set_client_tag(tag))
+end
+
+-- stacks
+for name, stack in pairs(stacks) do
+    session:add_bind(super .. "S", "" .. stack, funcs.set_client_stack(stack))
+end
+
+-- debug tools
+session:add_bind(super, "P", funcs.reload())
+session:add_bind(super, "G", gaps.increase(2))
+session:add_bind(super .. "S", "G", gaps.decrease(2))
+session:add_bind(super .. "S", "V", gaps.toggle())
 
 -- module switch bind
 session:add_bind(super .. "S", "L", debug_window_set(false))
@@ -296,6 +305,7 @@ session:add_rule({}, function(client)
     client:set_border(3)
 end)
 
+-- More specific rules
 local client_rule = function(filter, rule)
     local filter = filter
     local rule = rule
@@ -350,8 +360,4 @@ end)
 function reload_colors()
     package.loaded["mondo.colors"] = nil
     require("mondo.colors")
-end
-
-function get_tag_name()
-    return "F" .. session:get_active_tag().to_string()
 end
