@@ -3,7 +3,7 @@ const wlr = @import("wlroots");
 const std = @import("std");
 const zlua = @import("zlua");
 
-const Config = @import("config.zig");
+const Config = @import("Config.zig");
 
 const allocator = Config.allocator;
 const Lua = zlua.Lua;

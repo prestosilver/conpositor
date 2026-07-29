@@ -1,8 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const Session = @import("session.zig");
-const Config = @import("config.zig");
+const Session = @import("Session.zig");
+const Config = @import("Config.zig");
 
 pub const std_options = std.Options{
     // I wanna share loggers with wayland

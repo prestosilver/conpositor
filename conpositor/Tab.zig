@@ -2,9 +2,9 @@ const cairo = @import("cairo");
 const wlr = @import("wlroots");
 const std = @import("std");
 
-const Config = @import("config.zig");
-const Session = @import("session.zig");
-const Client = @import("client.zig");
+const Config = @import("Config.zig");
+const Session = @import("Session.zig");
+const Client = @import("Client.zig");
 
 const Tab = @This();
 

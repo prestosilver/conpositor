@@ -3,9 +3,9 @@ const conpositor = @import("wayland").server.conpositor;
 const wlr = @import("wlroots");
 const std = @import("std");
 
-const Monitor = @import("monitor.zig");
-const Session = @import("session.zig");
-const Config = @import("config.zig");
+const Monitor = @import("Monitor.zig");
+const Session = @import("Session.zig");
+const Config = @import("Config.zig");
 
 const allocator = Config.allocator;
 

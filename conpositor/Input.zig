@@ -5,9 +5,9 @@ const xkb = @import("xkbcommon");
 const cairo = @import("cairo");
 const c = @import("c.zig").c;
 
-const Session = @import("session.zig");
-const Client = @import("client.zig");
-const Config = @import("config.zig");
+const Session = @import("Session.zig");
+const Client = @import("Client.zig");
+const Config = @import("Config.zig");
 
 const Input = @This();
 

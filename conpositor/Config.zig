@@ -5,10 +5,10 @@ const xkb = @import("xkbcommon");
 const c = @import("c.zig").c;
 const known_folders = @import("known-folders");
 
-const Layout = @import("layout.zig");
-const Session = @import("session.zig");
-const Client = @import("client.zig");
-const Monitor = @import("monitor.zig");
+const Layout = @import("Layout.zig");
+const Session = @import("Session.zig");
+const Client = @import("Client.zig");
+const Monitor = @import("Monitor.zig");
 
 const Config = @This();
 
@@ -167,12 +167,8 @@ const LuaClosure = struct {
         std.log.debug("Unref lua object {}", .{self.ref});
     }
 
-    pub fn toLua(self: LuaClosure, lua: *Lua) void {
-        _ = lua.getIndexRaw(zlua.registry_index, self.ref);
-    }
-    
     pub fn format(self: LuaClosure, writer: *std.Io.Writer) !void {
-        try writer.print("Closure#{}", .{ self.ref });
+        try writer.print("Closure#{}", .{self.ref});
     }
 
     pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !LuaClosure {
@@ -198,6 +194,10 @@ const LuaClosure = struct {
             .ref = r,
             .upvs = upvs,
         };
+    }
+
+    pub fn toLua(self: LuaClosure, lua: *Lua) void {
+        _ = lua.getIndexRaw(zlua.registry_index, self.ref);
     }
 };
 
@@ -289,7 +289,7 @@ pub const LuaModule = struct {
 
     const LuaMethods = struct {
         pub fn new(text: LuaClosure) LuaModule {
-            std.log.debug("New lua bar module {f}", .{text.ref});
+            std.log.debug("New lua bar module {f}", .{text});
 
             return .{
                 .calls = text,
@@ -326,6 +326,10 @@ pub const LuaModule = struct {
         self.calls.deinit();
     }
 
+    pub fn format(self: LuaModule, writer: *std.Io.Writer) !void {
+        try writer.print("LuaModule({f})", .{self.calls});
+    }
+
     pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !LuaModule {
         const result = try lua.toUserdata(LuaModule, index);
         return result.*;
@@ -343,6 +347,10 @@ const LuaTag = struct {
     id: u8,
 
     const LuaMethods = struct {};
+
+    pub fn format(self: LuaTag, writer: *std.Io.Writer) !void {
+        try writer.print("Tag#{}", .{self.id});
+    }
 
     pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !LuaTag {
         const result = try lua.toUserdata(LuaTag, index);
@@ -413,6 +421,10 @@ const LuaLayout = struct {
         }
     };
 
+    pub fn format(self: LuaLayout, writer: *std.Io.Writer) !void {
+        try writer.print("{*}", .{self.child});
+    }
+
     pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !LuaLayout {
         const result = try lua.toUserdata(LuaLayout, index);
         return result.*;
@@ -446,7 +458,7 @@ pub const LuaMonitor = struct {
         pub fn set_tag(self: *LuaMonitor, tag: *LuaTag) void {
             self.child.setActiveTag(tag.id);
 
-            std.log.debug("Set monitor {f} tag to {f}", .{self, tag});
+            std.log.debug("Set monitor {f} tag to {f}", .{ self, tag });
         }
 
         pub fn get_layout(self: *LuaMonitor) ?LuaLayout {
@@ -458,7 +470,7 @@ pub const LuaMonitor = struct {
         pub fn set_layout(self: *LuaMonitor, layout: LuaLayout) void {
             self.child.setLayout(layout.child);
 
-            std.log.debug("Set monitor {f} layout to {f}", .{self, layout});
+            std.log.debug("Set monitor {f} layout to {f}", .{ self, layout });
         }
 
         pub fn set_inner_gaps(self: *LuaMonitor, size: i32) void {
@@ -469,6 +481,10 @@ pub const LuaMonitor = struct {
             self.child.setGaps(.outer, size);
         }
     };
+
+    pub fn format(self: LuaMonitor, writer: *std.Io.Writer) !void {
+        try writer.print("{*}", .{self.child});
+    }
 
     pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !LuaMonitor {
         const result = try lua.toUserdata(LuaMonitor, index);
@@ -517,13 +533,13 @@ const LuaClient = struct {
             self.child.setBorder(border);
         }
 
-        // TODO: Move client icons to lua. 
+        // TODO: Move client icons to lua.
         // tag clients by index, and have lua store/script the icon.
         pub fn set_icon(self: *LuaClient, icon: ?[:0]const u8) void {
             self.child.setIcon(@ptrCast(icon));
         }
 
-        // TODO: Move client labels to lua. 
+        // TODO: Move client labels to lua.
         // tag clients by index, and have lua store/script the label.
         pub fn set_label(self: *LuaClient, label: ?[:0]const u8) void {
             self.child.setLabel(label);
@@ -557,7 +573,7 @@ const LuaClient = struct {
             self.child.setContainer(stack);
             self.child.setFloating(false);
 
-            std.log.debug("Set client {f} stack to {f}", .{self, stack});
+            std.log.debug("Set client {f} stack to {}", .{ self, stack });
         }
 
         pub fn set_container(self: *LuaClient, container: *LuaContainer) void {
@@ -565,7 +581,7 @@ const LuaClient = struct {
                 self.child.setContainer(stack);
                 self.child.setFloating(false);
 
-                std.log.debug("Set client {f} container to {f}", .{self, stack});
+                std.log.debug("Set client {f} stack to {}", .{ self, stack });
             }
         }
 
@@ -642,6 +658,10 @@ const LuaClient = struct {
         }
     };
 
+    pub fn format(self: LuaClient, writer: *std.Io.Writer) !void {
+        try writer.print("{*}", .{self.child});
+    }
+
     pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !LuaClient {
         const result = try lua.toUserdata(LuaClient, index);
         return result.*;
@@ -659,6 +679,10 @@ const LuaStack = struct {
     id: u8,
 
     const LuaMethods = struct {};
+
+    pub fn format(self: *LuaStack, writer: *std.Io.Writer) !void {
+        try writer.print("stack#{}", .{self.id});
+    }
 
     pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !LuaStack {
         const result = try lua.toUserdata(LuaStack, index);
@@ -732,31 +756,6 @@ const LuaMethods = struct {
             .allocator = allocator,
         }, spawnThread, .{ self, name, args });
         thread.detach();
-
-        // const child_name = try allocator.dupeZ(u8, name);
-        // const child_args: [:null]?[*:0]const u8 = (try std.mem.concatWithSentinel(allocator, ?[*:0]const u8, &.{ &.{child_name}, args, &.{null} }, null));
-
-        // const pid = std.c.fork();
-
-        // if (pid == 0) {
-        //     for (child_args) |arg|
-        //         std.log.info("run {?s}", .{arg});
-
-        //     cleanupChild();
-
-        //     const pid2 = std.c.fork();
-        //     if (pid2 == 0) {
-        //         if (std.c.execve(child_name, child_args, std.c.environ) != 0) c._exit(1);
-        //     }
-
-        //     c._exit(0);
-        // }
-
-        // // Wait the intermediate child.
-        // const ret = std.c.waitpid(pid, null, 0);
-        // if (!std.posix.W.IFEXITED(@intCast(ret)) or
-        //     (std.posix.W.IFEXITED(@intCast(ret)) and std.posix.W.EXITSTATUS(@intCast(ret)) != 0))
-        // {}
     }
 
     pub fn set_font(self: *Config, face: []const u8, size: f32) !void {
@@ -837,7 +836,7 @@ const LuaMethods = struct {
         else
             self.inactive_colors.set(palette, .{ r, g, b, a });
 
-        std.log.debug("Add color {s} to pallette {s} as the {s} color with rgba ({} {} {} {})", .{color_name, palette_name, if (active) "active" else "inactive", r, g, b, a });
+        std.log.debug("Add color {s} to pallette {s} as the {s} color with rgba ({} {} {} {})", .{ color_name, palette_name, if (active) "active" else "inactive", r, g, b, a });
 
         try session.reloadColors();
     }
@@ -872,7 +871,7 @@ const LuaMethods = struct {
             if (try self.binds.fetchPut(key, calls)) |value|
                 value.value.deinit();
 
-            std.log.debug("Created bind for {f} {f}", .{mods, key});
+            std.log.debug("Created bind for {any} {f}", .{ mods, key });
         }
 
         if (old_top != lua.getTop() + 0)

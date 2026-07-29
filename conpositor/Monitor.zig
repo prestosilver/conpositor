@@ -3,13 +3,12 @@ const wlr = @import("wlroots");
 const std = @import("std");
 const conpositor = @import("wayland").server.conpositor;
 
-const ipc = @import("ipc.zig");
-
-const LayerSurface = @import("layersurface.zig");
-const Config = @import("config.zig");
-const Session = @import("session.zig");
-const Client = @import("client.zig");
-const Layout = @import("layout.zig");
+const ipc = @import("Ipc.zig");
+const LayerSurface = @import("LayerSurface.zig");
+const Config = @import("Config.zig");
+const Session = @import("Session.zig");
+const Client = @import("Client.zig");
+const Layout = @import("Layout.zig");
 
 const Monitor = @This();
 
@@ -122,7 +121,7 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
     const result: *Monitor = try allocator.create(Monitor);
     output.data = @ptrCast(@alignCast(result));
 
-    std.log.debug("Created monitor {} for {s}", .{result, output.name});
+    std.log.debug("Created monitor {*} for {s}", .{ result, output.name });
 
     session.monitors.append(result);
 

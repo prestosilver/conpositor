@@ -2,9 +2,9 @@ const wl = @import("wayland").server.wl;
 const wlr = @import("wlroots");
 const std = @import("std");
 
-const Session = @import("session.zig");
-const Monitor = @import("monitor.zig");
-const Config = @import("config.zig");
+const Session = @import("Session.zig");
+const Monitor = @import("Monitor.zig");
+const Config = @import("Config.zig");
 
 const LayerSurface = @This();
 
@@ -126,7 +126,7 @@ fn map(self: *LayerSurface) !void {
 }
 
 fn commit(self: *LayerSurface) !void {
-    std.log.debug("Configure layer surface {*} on {*}", .{self, self.monitor});
+    std.log.debug("Configure layer surface {*} on {*}", .{ self, self.monitor });
 
     if (self.surface.output) |output| {
         self.monitor = @ptrCast(@alignCast(output.data));

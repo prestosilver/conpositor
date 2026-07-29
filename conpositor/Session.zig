@@ -6,12 +6,12 @@ const xcb = @import("xcb");
 
 const c = @import("c.zig").c;
 
-const Config = @import("config.zig");
-const Monitor = @import("monitor.zig");
-const Client = @import("client.zig");
-const Input = @import("input.zig");
-const LayerSurface = @import("layersurface.zig");
-const IpcOutput = @import("ipc.zig");
+const Config = @import("Config.zig");
+const Monitor = @import("Monitor.zig");
+const Client = @import("Client.zig");
+const Input = @import("Input.zig");
+const LayerSurface = @import("LayerSurface.zig");
+const IpcOutput = @import("Ipc.zig");
 
 const Session = @This();
 

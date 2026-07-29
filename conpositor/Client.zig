@@ -3,11 +3,11 @@ const wlr = @import("wlroots");
 const std = @import("std");
 const cairo = @import("cairo");
 
-const CairoBuffer = @import("cairobuffer.zig");
-const Session = @import("session.zig");
-const Monitor = @import("monitor.zig");
-const Config = @import("config.zig");
-const Tab = @import("tab.zig");
+const CairoBuffer = @import("CairoBuffer.zig");
+const Session = @import("Session.zig");
+const Monitor = @import("Monitor.zig");
+const Config = @import("Config.zig");
+const Tab = @import("Tab.zig");
 
 const Client = @This();
 
@@ -275,7 +275,7 @@ pub fn init(session: *Session, target: ClientSurface) !void {
             surface.surface.events.unmap.add(&client.events.unmap_event);
             surface.surface.events.destroy.add(&client.events.deinit_event);
 
-            std.log.debug("Created client {*}", .{ client });
+            std.log.debug("Created client {*}", .{client});
 
             return;
         },
@@ -297,7 +297,7 @@ pub fn init(session: *Session, target: ClientSurface) !void {
             surface.events.set_hints.add(&client.events.xevents.set_hints_event);
             surface.events.destroy.add(&client.events.xevents.deinit_event);
 
-            std.log.debug("Created x11 client {*}", .{ client });
+            std.log.debug("Created x11 client {*}", .{client});
         },
     }
 }
@@ -876,7 +876,7 @@ fn updateFullscreen(self: *Client) !void {
 }
 
 fn updateTop(self: *Client) !void {
-    std.log.debug("Update client to top", .{ self });
+    std.log.debug("Update client to top {*}", .{self});
     defer self.dirty.top = false;
 
     try self.updateFrame();
@@ -907,7 +907,7 @@ fn setHints(self: *Client) !void {
 }
 
 fn map(self: *Client) !void {
-    std.log.debug("Map client {*} with surface {f}", .{self, self.surface});
+    std.log.debug("Map client {*} with surface {}", .{ self, self.surface });
 
     self.scene = try self.session.layers.get(.LyrTile).createSceneTree();
 
