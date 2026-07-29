@@ -20,8 +20,21 @@ mouse.setup {}
 -- create my containers
 local stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
 local tags = { f1 = 1, f2 = 2, f3 = 3, f4 = 4 }
+local layouts = {
+    default_layout = 1, center_layout = 2, lefty_layout = 3,
+    default_layout_b = 4, center_layout_b = 5, lefty_layout_b = 6
+}
 
-local function setup_abcd(root_container, ab_split, in_ac_split, in_bd_split, flip)
+local layout_names = {}
+layout_names[default_layout] = "] > ["
+layout_names[center_layout] = "] | ["
+layout_names[lefty_layout] = "] < ["
+layout_names[default_layout_b] = "[ > ]"
+layout_names[center_layout_b] = "[ | ]"
+layout_names[lefty_layout_b] = "[ < ]"
+
+local function setup_abcd(layout, ab_split, in_ac_split, in_bd_split, flip)
+    local root_container = session:get_layout_root(layout)
     local ac_split = in_ac_split
     local bd_split = in_bd_split
     if flip then
@@ -52,30 +65,23 @@ local function setup_abcd(root_container, ab_split, in_ac_split, in_bd_split, fl
     end
 end
 
-local default_layout = session:add_layout("] > [")
-local center_layout = session:add_layout("] | [")
-local lefty_layout = session:add_layout("] < [")
-local default_layout_b = session:add_layout("[ > ]")
-local center_layout_b = session:add_layout("[ | ]")
-local lefty_layout_b = session:add_layout("[ < ]")
+setup_abcd(layouts.default_layout, 0.7, 0.2, 0.4, false)
+setup_abcd(layouts.center_layout, 0.5, 0.2, 0.4, false)
+setup_abcd(layouts.lefty_layout, 0.3, 0.2, 0.4, false)
 
-setup_abcd(default_layout:root(), 0.7, 0.2, 0.4, false)
-setup_abcd(center_layout:root(), 0.5, 0.2, 0.4, false)
-setup_abcd(lefty_layout:root(), 0.3, 0.2, 0.4, false)
-
-setup_abcd(lefty_layout_b:root(), 0.7, 0.2, 0.4, true)
-setup_abcd(center_layout_b:root(), 0.5, 0.2, 0.4, true)
-setup_abcd(default_layout_b:root(), 0.3, 0.2, 0.4, true)
+setup_abcd(layouts.lefty_layout_b, 0.7, 0.2, 0.4, true)
+setup_abcd(layouts.center_layout_b, 0.5, 0.2, 0.4, true)
+setup_abcd(layouts.default_layout_b, 0.3, 0.2, 0.4, true)
 
 local lefty_cycle = {
-    { lefty_layout,   center_layout,   default_layout, },  -- normal
-    { lefty_layout_b, center_layout_b, default_layout_b, } -- flip
+    { layouts.lefty_layout,   layouts.center_layout,   layouts.default_layout, },  -- normal
+    { layouts.lefty_layout_b, layouts.center_layout_b, layouts.default_layout_b, } -- flip
 }
 
 local flip_cycle = {
-    { lefty_layout,   lefty_layout_b },  -- lefty
-    { center_layout,  center_layout_b }, -- center
-    { default_layout, default_layout_b } -- default
+    { layouts.lefty_layout,   layouts.lefty_layout_b },  -- lefty
+    { layouts.center_layout,  layouts.center_layout_b }, -- center
+    { layouts.default_layout, layouts.default_layout_b } -- default
 }
 
 -- mouse functions
@@ -140,8 +146,8 @@ if force_debug or session.is_debug() then
 end
 
 -- mousebinds
-mouse.addBind("resize", mouse_resize)
-mouse.addBind("move", mouse_move)
+mouse:add_bind("resize", mouse_resize)
+mouse:add_bind("move", mouse_move)
 
 session:add_mouse(super, "Left", mouse.bind("move"))
 session:add_mouse(super, "Right", mouse.bind("resize"))
@@ -195,31 +201,43 @@ session:add_bind(super .. "S", "G", gaps.decrease(2))
 session:add_bind(super .. "S", "V", gaps.toggle())
 
 -- title modules
-local icon_module = Module.new(function(client)
+local icon_module = {}
+icon_module.text = function(client)
     return client:get_icon() or ""
-end)
+end
 
-local title_module = Module.new(function(client)
+local title_module = {}
+title_module.text = function(client)
     return client:get_label() or client:get_title() or ""
-end)
+end
 
-local debug_module = Module.new(function(client)
+local debug_module = {}
+debug_module.text = function(client)
     local label = client:get_label() or "(none)"
     local title = client:get_title() or "(none)"
     local appid = client:get_appid() or "(none)"
     return "[" .. label .. "] title: '" .. title .. "' appid: '" .. appid .. "'"
-end)
+end
+
+local close_icon = Texture:new("close.png")
+local close_module = {}
+close_module.image = function(client) close_icon end
+close_module.on_click = function(client) client:close() end
 
 local default_modules = {
-    left = {},
-    center = { icon_module, title_module },
-    right = {}
+    top = {
+        left = {},
+        center = { icon_module, title_module },
+        right = { close_module }
+    }
 }
 
 local debug_modules = {
-    left = { icon_module },
-    center = { debug_module },
-    right = { title_module }
+    top = {
+        left = { icon_module, title_module },
+        center = { debug_module },
+        right = { close_module }
+    }
 }
 
 local function debug_window_set(value)
@@ -239,6 +257,31 @@ local function debug_window_set(value)
         end
     end
 end
+
+-- add the bar
+local time_module = {}
+time_module.text = function(monitor) return "TIME O CLOCK" end
+
+local active_client_module = {}
+active_client_module.text = function(monitor)
+    local client = monitor:get_active_client()
+    if client then
+        return client:get_title() .. client:get_icon()
+    else
+        return "Desktop"
+    end
+end
+
+session:add_hook("add_monitor", function(monitor)
+    monitor:set_bars({
+        top = {
+            left = { time_module },
+            center = { active_client_module },
+            right = { }
+        }
+    })
+end)
+
 
 -- module switch bind
 session:add_bind(super .. "S", "L", debug_window_set(false))
