@@ -2,6 +2,7 @@
 local gaps = require("conpositor.gaps")
 local funcs = require("conpositor.funcs")
 local mouse = require("conpositor.mouse")
+local mondo = require("mondo.colors")
 
 -- add this first in case of crash
 session:add_bind("AS", "Escape", funcs.quit())
@@ -10,43 +11,41 @@ session:add_bind("AS", "Escape", funcs.quit())
 local force_debug = false
 local terminal = "kitty"
 
--- load colorscheme and libraries
-require("mondo.colors")
+local ab_split = 0.7
+local ac_split = 0.2
+local bd_split = 0.4
 
 -- setup libraries
 gaps.setup { toggle = true, value = 8, ratio = 2, outer = 30 }
 mouse.setup {}
 
 -- set my super key
-local super = "L"
-if force_debug or session.is_debug() then
-    super = "A"
-end
+local super = force_debug or session.is_debug() and "A" or "L"
 
 -- create my containers
 local stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
 local tags = { f1 = 1, f2 = 2, f3 = 3, f4 = 4 }
-local layouts = {
-    default_layout = 1, center_layout = 2, lefty_layout = 3,
-    default_layout_b = 4, center_layout_b = 5, lefty_layout_b = 6
-}
 
-local layout_names = {}
-layout_names[default_layout] = "] > ["
-layout_names[center_layout] = "] | ["
-layout_names[lefty_layout] = "] < ["
-layout_names[default_layout_b] = "[ > ]"
-layout_names[center_layout_b] = "[ | ]"
-layout_names[lefty_layout_b] = "[ < ]"
+local function layout(align, reverse)
+    local align_id = 0
+    local reverse_id = 0
+    
+    if align == "right" then align_id = 1 end
+    if align == "center" then align_id = 2 end
+    if align == "left" then align_id = 3 end
+    
+    if reverse == true then reverse_id = 0 end
+    if reverse == false then reverse_id = 1 end
 
+    return reverse_id * 3 + align_id
+end
+
+-- setup the base split system
 local function setup_abcd(layout, ab_split, in_ac_split, in_bd_split, flip)
     local root_container = session:get_layout_root(layout)
-    local ac_split = in_ac_split
-    local bd_split = in_bd_split
-    if flip then
-        ac_split = in_bd_split
-        bd_split = in_ac_split
-    end
+    
+    local ac_split = flip and in_bd_split or in_ac_split
+    local bd_split = flip and in_ac_split or in_bd_split
 
     local bd_container = root_container:add_child(ab_split, 0.0, 1.0, 1.0)
     local ac_container = root_container:add_child(0.0, 0.0, ab_split, 1.0)
@@ -71,24 +70,33 @@ local function setup_abcd(layout, ab_split, in_ac_split, in_bd_split, flip)
     end
 end
 
-setup_abcd(layouts.default_layout, 0.7, 0.2, 0.4, false)
-setup_abcd(layouts.center_layout, 0.5, 0.2, 0.4, false)
-setup_abcd(layouts.lefty_layout, 0.3, 0.2, 0.4, false)
+local align_cycle = {{ }, { }}
+local reverse_cycle = {{ }, { }, { }}
+local layout_names = {}
+for align_index, align in ipairs{"right", "center", "left"} do
+    local align_text
+    if align == "right" then align_text = ">" end
+    if align == "center" then align_text = "|" end
+    if align == "left" then align_text = "<" end
+    for reverse_index, reverse in ipairs{true, false} do
+        local brackets
+        if reverse == false then brackets = {"[", "]"} end
+        if reverse == true then brackets = {"]", "["} end
 
-setup_abcd(layouts.lefty_layout_b, 0.7, 0.2, 0.4, true)
-setup_abcd(layouts.center_layout_b, 0.5, 0.2, 0.4, true)
-setup_abcd(layouts.default_layout_b, 0.3, 0.2, 0.4, true)
+        local layout_index = layout(align, reverse)
 
-local lefty_cycle = {
-    { layouts.lefty_layout,   layouts.center_layout,   layouts.default_layout, },  -- normal
-    { layouts.lefty_layout_b, layouts.center_layout_b, layouts.default_layout_b, } -- flip
-}
+        layout_names[layout_index] = brackets[1] .. " " .. align_text .. " " .. brackets[2]
 
-local flip_cycle = {
-    { layouts.lefty_layout,   layouts.lefty_layout_b },  -- lefty
-    { layouts.center_layout,  layouts.center_layout_b }, -- center
-    { layouts.default_layout, layouts.default_layout_b } -- default
-}
+        local ab_split = ab_split
+        if align == "center" then ab_split = 0.5 end
+        if align == "left" then ab_split = 1.0 - ab_split end
+
+        setup_abcd(layout_index, ab_split, ac_split, bd_split, reverse)
+
+        align_cycle[reverse_index][align_index] = layout(align, reverse) 
+        reverse_cycle[align_index][reverse_index] = layout(align, reverse)
+    end
+end
 
 -- mouse functions
 local mouse_client = nil
@@ -187,26 +195,21 @@ local debug_modules = {
 }
 
 local function debug_window_set(value)
-    if value then
-        return function()
-            local client = session:active_client()
-            if client then
-                client:set_modules(debug_modules)
-            end
-        end
-    else
-        return function()
-            local client = session:active_client()
-            if client then
-                client:set_modules(default_modules)
-            end
+    local modules = value and default_modules or debug_modules
+
+    return function()
+        local client = session:active_client()
+        if client then
+            client:set_modules(modules)
         end
     end
 end
 
 -- add the bar
 local time_module = {}
-time_module.text = function(monitor) return "TIME O CLOCK" end
+time_module.text = function(monitor)
+    return "TIME O CLOCK"
+end
 
 local layout_module = {}
 layout_module.text = function(monitor)
@@ -214,6 +217,7 @@ layout_module.text = function(monitor)
 end
 
 local active_client_module = {}
+active_client_module.palette = mondo.inactive
 active_client_module.text = function(monitor)
     local client = monitor:get_active_client()
     if client then
@@ -223,27 +227,30 @@ active_client_module.text = function(monitor)
     end
 end
 
-local tag_module = {}
-tag_module.text = function(monitor)
+local active_tag_module = {}
+active_tag_module.text = function(monitor)
     return get_tag_name()
 end
 
-session:add_hook("add_monitor", function(monitor)
-    monitor:set_bars({
-        top = {
-            left = { layout_module, tag_module,  },
-            center = { active_client_module },
-            right = { time_module }
-        }
-    })
-end)
+local default_bars = {
+    top = {
+        palette = mondo.active,
 
--- mousebinds
-mouse:add_bind("resize", mouse_resize)
-mouse:add_bind("move", mouse_move)
+        left = { layout_module, tag_module,  },
+        center = { active_client_module },
+        right = { time_module }
+    }
+}
 
-session:add_mouse(super, "Left", mouse.bind("move"))
-session:add_mouse(super, "Right", mouse.bind("resize"))
+-- mouse binds
+local mouse_resize_action = mouse.create_bind(mouse_resize)
+local mouse_move_action = mouse.create_bind(mouse_move)
+
+session:add_mouse("client", super, "Left", mouse_move_action)
+session:add_mouse("client", super, "Right", mouse_resize_action)
+
+session:add_mouse("client_frame", "", "Left", mouse_move_action)
+session:add_mouse("client_frame", "", "Right", mouse_resize_action)
 
 -- programs
 session:add_bind(super, "Return", funcs.spawn(terminal, { "--class=termA" }))
@@ -266,8 +273,8 @@ session:add_bind(super .. "S", "W", funcs.spawn("bwpcontrol", { "menu" }))
 session:add_bind(super, "T", funcs.spawn("mondocontrol", { "menu" }))
 
 -- misc session mgmt
-session:add_bind(super, "H", funcs.cycle_layout(1, lefty_cycle))
-session:add_bind(super .. "S", "H", funcs.cycle_layout(1, flip_cycle))
+session:add_bind(super, "H", funcs.cycle_layout(1, align_cycle))
+session:add_bind(super .. "S", "H", funcs.cycle_layout(1, reverse_cycle))
 session:add_bind(super, "Tab", funcs.cycle_focus(1))
 session:add_bind(super .. "S", "Tab", funcs.cycle_focus(-1))
 session:add_bind(super, "Space", funcs.toggle_floating())
@@ -303,10 +310,12 @@ session:add_rule({}, function(client)
     client:set_floating(true)
     client:set_icon("?")
     client:set_border(3)
+    client:set_palette("active", mondo.active)
+    client:set_palette("inactive", mondo.inactive)
 end)
 
 -- More specific rules
-local client_rule = function(filter, rule)
+local function client_rule(filter, rule)
     local filter = filter
     local rule = rule
     session:add_rule(filter, function(client)
@@ -341,21 +350,24 @@ client_rule({ appid = "cava" }, { stack = stacks.b, icon = "", title = "Vis" 
 client_rule({ appid = "SandEEE" }, { stack = stacks.c })
 client_rule({ appid = "steam" }, { stack = stacks.c })
 
-session:add_hook("startup", function(startup)
-    session:spawn("wlr-randr",
-        { "--output", "eDP-1", "--pos", "2560,0", "--output", "DP-4", "--mode", "2560x1080", "--pos", "0,0",
-            "--preferred" })
-    session:spawn("swww-daemon", {})
-    session:spawn("dunst", {})
-    session:spawn("waybar", {})
-    session:spawn("blueman-applet", {})
-    session:spawn("nm-applet", {})
-    session:spawn("/usr/lib/gsd-xsettings", {})
-end)
+session:add_hooks {
+    startup = function(status)
+        session:spawn("wlr-randr",
+            { "--output", "eDP-1", "--pos", "2560,0", "--output", "DP-4", "--mode", "2560x1080", "--pos", "0,0",
+                "--preferred" })
+        session:spawn("swww-daemon", {})
+        session:spawn("dunst", {})
+        session:spawn("waybar", {})
+        session:spawn("blueman-applet", {})
+        session:spawn("nm-applet", {})
+        session:spawn("/usr/lib/gsd-xsettings", {})
+    end
 
-session:add_hook("add_monitor", function(monitor)
-    monitor:set_layout(default_layout)
-end)
+    add_monitor = function(monitor)
+        monitor:set_layout(default_layout)
+        monitor:set_bars(default_bars)
+    end
+}
 
 function reload_colors()
     package.loaded["mondo.colors"] = nil
