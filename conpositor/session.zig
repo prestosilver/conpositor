@@ -167,7 +167,7 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xdg_popup_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
-        std.log.debug("Popup created {*}", .{ xdg_surface.base });
+        std.log.debug("Popup created {*}", .{xdg_surface.base});
 
         self.newPopup(xdg_surface) catch |err| {
             std.log.err("Failed to init popup {}", .{err});
@@ -178,7 +178,7 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xdg_toplevel_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
-        std.log.debug("Toplevel created {*}", .{ xdg_surface.base });
+        std.log.debug("Toplevel created {*}", .{xdg_surface.base});
 
         self.newClient(.{ .XDG = xdg_surface.base }) catch |err| {
             std.log.err("Failed to init Toplevel client {}", .{err});
@@ -189,7 +189,7 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xdg_surface_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
-        std.log.debug("LayerSurface created {*}", .{ xdg_surface.base });
+        std.log.debug("LayerSurface created {*}", .{xdg_surface});
 
         self.newClient(.{ .XDG = xdg_surface }) catch |err| {
             std.log.err("Failed to init LayerSurface {}", .{err});
@@ -200,7 +200,7 @@ const Events = struct {
         const events: *Session.Events = @fieldParentPtr("new_xwayland_surface_event", listener);
         const self: *Session = @fieldParentPtr("events", events);
 
-        std.log.debug("XwaylandSurface created {*}", .{ xdg_surface.base });
+        std.log.debug("XwaylandSurface created {*}", .{xwayland_surface});
 
         self.newClient(.{ .X11 = xwayland_surface }) catch |err| {
             std.log.err("Failed to init Xwayland Client {}", .{err});
