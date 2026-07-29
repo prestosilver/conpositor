@@ -227,5 +227,5 @@ end)
 session:add_hook("startup", function(startup)
     -- Run startup commands here
     -- Example:
-    -- session:spawn("waybar", {})
+    -- session:spawn("waybar")
 end)

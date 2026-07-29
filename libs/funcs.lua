@@ -153,9 +153,9 @@ end
 --- @param program string The program to call
 --- @param args Any arguments to pass
 --- @return fun() # Returns a function callback
-function M.spawn(program, args)
+function M.spawn(program, ...)
     local program = program
-    local args = args
+    local args = {...}
     return function()
         session:spawn(program, args)
     end

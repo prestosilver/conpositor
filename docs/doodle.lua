@@ -258,24 +258,24 @@ session:add_mouse("client_frame", "", "Left", mouse_move_action)
 session:add_mouse("client_frame", "", "Right", mouse_resize_action)
 
 -- programs
-session:add_bind(super, "Return", funcs.spawn(terminal, { "--class=termA" }))
-session:add_bind(super .. "S", "Return", funcs.spawn(terminal, { "--class=termB" }))
-session:add_bind(super .. "C", "Return", funcs.spawn(terminal, { "--class=termB" }))
-session:add_bind(super, "I", funcs.spawn(terminal, { "--class=htop", "-e", "htop" }))
-session:add_bind(super, "M", funcs.spawn(terminal, { "--class=music", "-e", "kew" }))
-session:add_bind(super, "R", funcs.spawn(terminal, { "--class=filesD", "-e", "ranger" }))
-session:add_bind(super .. "S", "R", funcs.spawn(terminal, { "--class=filesB", "-e", "ranger" }))
-session:add_bind(super, "V", funcs.spawn(terminal, { "--class=cava", "-e", "cava" }))
+session:add_bind(super, "Return", funcs.spawn(terminal, "--class=termA"))
+session:add_bind(super .. "S", "Return", funcs.spawn(terminal, "--class=termB"))
+session:add_bind(super .. "C", "Return", funcs.spawn(terminal, "--class=termB"))
+session:add_bind(super, "I", funcs.spawn(terminal, "--class=htop", "-e", "htop"))
+session:add_bind(super, "M", funcs.spawn(terminal, "--class=music", "-e", "kew"))
+session:add_bind(super, "R", funcs.spawn(terminal, "--class=filesD", "-e", "ranger"))
+session:add_bind(super .. "S", "R", funcs.spawn(terminal, "--class=filesB", "-e", "ranger"))
+session:add_bind(super, "V", funcs.spawn(terminal, "--class=cava", "-e", "cava"))
 
-session:add_bind(super .. "S", "S", funcs.spawn("ss.sh", {}))
-session:add_bind(super, "W", funcs.spawn("vivaldi", { "--ozone-platform=wayland" }))
-session:add_bind(super, "A", funcs.spawn("pavucontrol", {}))
+session:add_bind(super .. "S", "S", funcs.spawn("ss.sh"))
+session:add_bind(super, "W", funcs.spawn("vivaldi", "--ozone-platform=wayland"))
+session:add_bind(super, "A", funcs.spawn("pavucontrol"))
 
 -- launchers
-session:add_bind(super, "D", funcs.spawn("bemenu-launcher", {}))
-session:add_bind(super .. "S", "D", funcs.spawn("j4-dmenu-desktop", { "--dmenu=menu" }))
-session:add_bind(super .. "S", "W", funcs.spawn("bwpcontrol", { "menu" }))
-session:add_bind(super, "T", funcs.spawn("mondocontrol", { "menu" }))
+session:add_bind(super, "D", funcs.spawn("bemenu-launcher"))
+session:add_bind(super .. "S", "D", funcs.spawn("j4-dmenu-desktop", "--dmenu=menu"))
+session:add_bind(super .. "S", "W", funcs.spawn("bwpcontrol", "menu"))
+session:add_bind(super, "T", funcs.spawn("mondocontrol", "menu"))
 
 -- misc session mgmt
 session:add_bind(super, "H", funcs.cycle_layout(1, align_cycle))
@@ -357,15 +357,15 @@ client_rule({ appid = "steam" }, { stack = stacks.c })
 
 session:add_hooks {
     startup = function(status)
-        session:spawn("wlr-randr",
-            { "--output", "eDP-1", "--pos", "2560,0", "--output", "DP-4", "--mode", "2560x1080", "--pos", "0,0",
-                "--preferred" })
-        session:spawn("swww-daemon", {})
-        session:spawn("dunst", {})
-        session:spawn("waybar", {})
-        session:spawn("blueman-applet", {})
-        session:spawn("nm-applet", {})
-        session:spawn("/usr/lib/gsd-xsettings", {})
+    session:spawn("wlr-randr",
+        "--output", "eDP-1", "--pos", "2560,0",
+        "--output", "DP-4", "--mode", "2560x1080", "--pos", "0,0", "--preferred")
+        session:spawn("swww-daemon")
+        session:spawn("dunst")
+        session:spawn("waybar")
+        session:spawn("blueman-applet")
+        session:spawn("nm-applet")
+        session:spawn("/usr/lib/gsd-xsettings")
     end
 
     add_monitor = function(monitor)
