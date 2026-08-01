@@ -1269,5 +1269,7 @@ fn deinit(self: *Client) void {
         },
     }
 
+    self.tab.deinit();
+
     allocator.destroy(self);
 }

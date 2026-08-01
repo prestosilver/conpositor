@@ -10,13 +10,15 @@ pub const std_options = std.Options{
 };
 
 // The only errors this program can return
-const ConpositorError = Session.SessionError ||
-    Config.ConfigError;
+const ConpositorError =
+    Session.Error ||
+    Config.Error;
 
 pub fn main(init: std.process.Init) ConpositorError!void {
     defer Config.allocator_data.deinit();
 
-    var session: Session = try .init(init.io, init.environ_map);
+    var session: Session = undefined;
+    try session.init(init.io, init.environ_map);
     defer session.deinit();
 
     try session.attachEvents();
