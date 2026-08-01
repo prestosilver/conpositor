@@ -64,6 +64,20 @@ pub fn build(b: *std.Build) void {
     wlroots_dep.module("wlroots").optimize = optimize;
     wlroots_dep.module("wlroots").linkSystemLibrary("wlroots-0.20", .{});
 
+    // docgen step
+    const conpositor_docgen = b.addExecutable(.{
+        .name = "conpositor-docgen",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("conpositor/docgen.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{},
+        }),
+    });
+
+    const run_docgen = b.addRunArtifact(conpositor_docgen);
+    const docs_path = run_docgen.addOutputDirectoryArg("docs");
+
     // Conpositor its self
     const conpositor = b.addExecutable(.{
         .name = "conpositor",
@@ -97,12 +111,11 @@ pub fn build(b: *std.Build) void {
         .install_subdir = "lib",
     });
 
-    // TODO: generate types
-    // const types_step = b.addInstallDirectory(.{
-    //     .source_dir = b.path("types"),
-    //     .install_dir = .{ .custom = "share/conpositor" },
-    //     .install_subdir = "config",
-    // });
+    const types_step = b.addInstallDirectory(.{
+        .source_dir = docs_path,
+        .install_dir = .{ .custom = "share/conpositor" },
+        .install_subdir = "types",
+    });
 
     const config_step = b.addInstallDirectory(.{
         .source_dir = b.path("config"),
@@ -112,6 +125,7 @@ pub fn build(b: *std.Build) void {
 
     const conpositor_step = b.addInstallArtifact(conpositor, .{});
     conpositor_step.step.dependOn(&lib_step.step);
+    conpositor_step.step.dependOn(&types_step.step);
     conpositor_step.step.dependOn(&config_step.step);
 
     b.getInstallStep().dependOn(&conpositor_step.step);
