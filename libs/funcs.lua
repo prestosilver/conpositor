@@ -57,7 +57,7 @@ function M.toggle_fullscreen()
     return function()
         local client = session:active_client()
         if client then
-          client:set_fullscreen(not client:get_fullscreen())
+            client:set_fullscreen(not client:get_fullscreen())
         end
     end
 end
@@ -153,9 +153,19 @@ end
 --- @param program string The program to call
 --- @param args Any arguments to pass
 --- @return fun() # Returns a function callback
-function M.spawn(program, ...)
-    local program = program
-    local args = {...}
+function M.spawn(...)
+    local count = select('#', ...)
+
+    local program = select(1, ...)
+    local args = {}
+
+    if count > 1 then
+        for i = 2, count do
+            local value = select(i, ...)
+            args[i - 1] = value
+        end
+    end
+
     return function()
         session:spawn(program, args)
     end
