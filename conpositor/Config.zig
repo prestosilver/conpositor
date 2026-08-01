@@ -105,32 +105,26 @@ pub fn init(self: *Config) Error!void {
         std.log.err("getrlimit failed, using system default file descriptor limit ", .{});
     }
 
-    self.home_path = try known_folders.getPath(
-        self.io,
-        allocator,
-        self.environ_map,
-        .home,
-    ) orelse "";
-    const libs_dir = self.environ_map.get("CONPOSITOR_LIB_DIR") orelse "/usr/share/conpositor";
-    const config_dir = try known_folders.getPath(
-        self.io,
-        allocator,
-        self.environ_map,
-        .local_configuration,
-    ) orelse "";
+    self.home_path = try known_folders.getPath(self.io, allocator, self.environ_map, .home) orelse
+        "";
+    const libs_dir = self.environ_map.get("CONPOSITOR_LIB_DIR") orelse
+        "/usr/share/conpositor";
+    const config_dir = self.environ_map.get("CONPOSITOR_CONFIG_DIR") orelse
+        try known_folders.getPath(self.io, allocator, self.environ_map, .local_configuration) orelse "";
     defer allocator.free(config_dir);
 
     const path: []const u8 = try std.fmt.allocPrint(allocator, "?;?.lua;" ++ // cwd
         "{s}/conpositor/?;{s}/conpositor/?.lua;" ++ // user config (config folder)
         "{s}/.conpositor/?;{s}/.conpositor/?.lua;" ++ // user config (home folder)
-        "{s}/?;{s}/?.lua;" ++ // system config
+        "{s}/?;{s}/?.lua;" ++ // system libs
         "{s}/config/?;{s}/config/?.lua;" ++ // system config
         "/usr/lib/lua/?;/usr/lib/lua/?.lua" // lua libraries
     , .{
-        config_dir,     config_dir,
-        self.home_path, self.home_path,
-        libs_dir,       libs_dir,
-        libs_dir,       libs_dir,
+        config_dir, config_dir, // config folder
+        self.home_path, self.home_path, // home folder
+        libs_dir, libs_dir, // system libs
+        libs_dir, libs_dir, // system config
+        // lua libs
     });
     defer allocator.free(path);
 

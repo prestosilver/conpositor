@@ -139,6 +139,7 @@ pub fn build(b: *std.Build) void {
     run_cmd.step.dependOn(b.getInstallStep());
 
     run_cmd.setEnvironmentVariable("CONPOSITOR_LIB_DIR", b.getInstallPath(.{ .custom = "share/conpositor" }, ""));
+    // run_cmd.setEnvironmentVariable("CONPOSITOR_CONFIG_DIR", b.getInstallPath(.{ .custom = "share/conpositor" }, "config"));
 
     if (b.args) |args| run_cmd.addArgs(args);
 
