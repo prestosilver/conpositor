@@ -1,6 +1,6 @@
-local gaps = require("conpositor.gaps")   -- A gap utility library
-local funcs = require("conpositor.funcs") -- Helper functions for bindings
-local mouse = require("conpositor.mouse") -- Some usual mouse binds so you dont have to implement them
+local gaps = require("lib.gaps")   -- A gap utility library
+local funcs = require("lib.funcs") -- Helper functions for bindings
+local mouse = require("lib.mouse") -- Some usual mouse binds so you dont have to implement them
 
 -- add an escape first in case of a lua crash
 session:add_bind("AS", "Escape", funcs.quit())

@@ -93,12 +93,26 @@ pub fn build(b: *std.Build) void {
 
     const lib_step = b.addInstallDirectory(.{
         .source_dir = b.path("libs"),
-        .install_dir = .lib,
-        .install_subdir = "conpositor",
+        .install_dir = .{ .custom = "share/conpositor" },
+        .install_subdir = "lib",
+    });
+
+    // TODO: generate types
+    // const types_step = b.addInstallDirectory(.{
+    //     .source_dir = b.path("types"),
+    //     .install_dir = .{ .custom = "share/conpositor" },
+    //     .install_subdir = "config",
+    // });
+
+    const config_step = b.addInstallDirectory(.{
+        .source_dir = b.path("config"),
+        .install_dir = .{ .custom = "share/conpositor" },
+        .install_subdir = "config",
     });
 
     const conpositor_step = b.addInstallArtifact(conpositor, .{});
     conpositor_step.step.dependOn(&lib_step.step);
+    conpositor_step.step.dependOn(&config_step.step);
 
     b.getInstallStep().dependOn(&conpositor_step.step);
 
@@ -124,7 +138,7 @@ pub fn build(b: *std.Build) void {
     const run_cmd = b.addRunArtifact(conpositor);
     run_cmd.step.dependOn(b.getInstallStep());
 
-    run_cmd.setEnvironmentVariable("CONPOSITOR_LIB_DIR", b.getInstallPath(.lib, ""));
+    run_cmd.setEnvironmentVariable("CONPOSITOR_LIB_DIR", b.getInstallPath(.{ .custom = "share/conpositor" }, ""));
 
     if (b.args) |args| run_cmd.addArgs(args);
 

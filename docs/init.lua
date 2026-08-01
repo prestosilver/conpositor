@@ -1,7 +1,7 @@
 -- require some builtin libraries
-local gaps = require("conpositor.gaps")
-local funcs = require("conpositor.funcs")
-local mouse = require("conpositor.mouse")
+local gaps = require("lib.gaps")
+local funcs = require("lib.funcs")
+local mouse = require("lib.mouse")
 
 -- add this first in case of crash
 session:add_bind("AS", "Escape", funcs.quit())

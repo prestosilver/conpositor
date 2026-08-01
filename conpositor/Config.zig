@@ -110,22 +110,27 @@ pub fn init(self: *Config) Error!void {
         allocator,
         self.environ_map,
         .home,
-    ) orelse ".";
-    const libs_dir = self.environ_map.get("CONPOSITOR_LIB_DIR") orelse "/usr/lib";
+    ) orelse "";
+    const libs_dir = self.environ_map.get("CONPOSITOR_LIB_DIR") orelse "/usr/share/conpositor";
+    const config_dir = try known_folders.getPath(
+        self.io,
+        allocator,
+        self.environ_map,
+        .local_configuration,
+    ) orelse "";
+    defer allocator.free(config_dir);
 
-    const path: []const u8 = try std.mem.concat(allocator, u8, &.{
-        self.home_path,
-        "/.config/conpositor/?.lua;",
-        self.home_path,
-        "/.config/conpositor/?;",
-        "?;",
-        "?.lua;",
-        libs_dir,
-        "/?.lua;",
-        libs_dir,
-        "/?;",
-        "/usr/lib/lua/?.lua;",
-        "/usr/lib/lua/?;",
+    const path: []const u8 = try std.fmt.allocPrint(allocator, "?;?.lua;" ++ // cwd
+        "{s}/conpositor/?;{s}/conpositor/?.lua;" ++ // user config (config folder)
+        "{s}/.conpositor/?;{s}/.conpositor/?.lua;" ++ // user config (home folder)
+        "{s}/?;{s}/?.lua;" ++ // system config
+        "{s}/config/?;{s}/config/?.lua;" ++ // system config
+        "/usr/lib/lua/?;/usr/lib/lua/?.lua" // lua libraries
+    , .{
+        config_dir,     config_dir,
+        self.home_path, self.home_path,
+        libs_dir,       libs_dir,
+        libs_dir,       libs_dir,
     });
     defer allocator.free(path);
 
