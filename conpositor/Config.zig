@@ -109,7 +109,9 @@ pub fn init(self: *Config) Error!void {
         "";
     const libs_dir = self.environ_map.get("CONPOSITOR_LIB_DIR") orelse
         "/usr/share/conpositor";
-    const config_dir = self.environ_map.get("CONPOSITOR_CONFIG_DIR") orelse
+    const config_dir = if (self.environ_map.get("CONPOSITOR_CONFIG_DIR")) |tmp|
+        try allocator.dupe(u8, tmp)
+    else
         try known_folders.getPath(self.io, allocator, self.environ_map, .local_configuration) orelse "";
     defer allocator.free(config_dir);
 
