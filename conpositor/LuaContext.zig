@@ -671,7 +671,7 @@ pub fn init(self: *Self, path: []const u8) Error!void {
     self.lua.setField(-2, "path");
     self.lua.pop(1);
 
-    self.lua.doString(@embedFile("type_gen.lua")) catch unreachable;
+    self.lua.doString(@embedFile("lua/type_gen.lua")) catch unreachable;
 
     inline for (LUA_TYPES) |lua_type|
         try lua_type.addTo(self.lua);
