@@ -35,7 +35,7 @@ pub const Layer = enum {
 const CycleDir = enum { forward, backward };
 const NetAtom = enum { window_type_dialog, window_type_splash, window_type_toolbar, window_type_utility };
 
-pub const SessionError = error{
+pub const Error = error{
     ServerCreateFailed,
     BackendCreateFailed,
     RendererCreateFailed,
@@ -48,7 +48,7 @@ pub const SessionError = error{
     SessionNotSetup,
     OutOfMemory,
     Unexpected,
-} || Config.ConfigError;
+} || Config.Error;
 
 config: Config,
 
@@ -101,6 +101,8 @@ const Events = struct {
     output_manager_test_event: wl.Listener(*wlr.OutputConfigurationV1) = .init(Events.outputManagerTest),
 
     commit_popup_event: wl.Listener(*wlr.Surface) = .init(commitPopup),
+
+    attached: bool = false,
 
     fn newOutput(listener: *wl.Listener(*wlr.Output), wlr_output: *wlr.Output) void {
         const events: *Session.Events = @fieldParentPtr("new_output_event", listener);
@@ -239,8 +241,25 @@ const FOCUS_ORDER = blk: {
 
 pub fn deinit(self: *Session) void {
     self.server.destroyClients();
-
     self.config.deinit();
+
+    if (self.events.attached) {
+        self.events.attached = false;
+
+        self.events.layout_change_event.link.remove();
+        self.events.new_output_event.link.remove();
+        self.events.new_xdg_toplevel_event.link.remove();
+        self.events.new_xdg_surface_event.link.remove();
+        self.events.new_xdg_popup_event.link.remove();
+        self.events.new_layer_surface_event.link.remove();
+        self.events.new_toplevel_decoration_event.link.remove();
+        self.events.new_xwayland_surface_event.link.remove();
+        self.events.xwayland_ready_event.link.remove();
+        self.events.output_manager_apply_event.link.remove();
+        self.events.output_manager_test_event.link.remove();
+    }
+
+    self.input.deinit();
 
     self.xwayland.?.destroy();
     self.xwayland = null;
@@ -491,7 +510,7 @@ const logger = struct {
     }
 };
 
-pub fn init(io: std.Io, environ_map: *std.process.Environ.Map) SessionError!Session {
+pub fn init(self: *Session, io: std.Io, environ_map: *std.process.Environ.Map) Error!void {
     wlr.log.init(.debug, &logger.log);
 
     const wl_server = try wl.Server.create();
@@ -554,9 +573,14 @@ pub fn init(io: std.Io, environ_map: *std.process.Environ.Map) SessionError!Sess
     const xwayland = try wlr.Xwayland.create(wl_server, compositor, false);
     const output_manager = try wlr.OutputManagerV1.create(wl_server);
 
-    return .{
+    self.* = .{
         .config = .{
-            .font = .{ .face = try allocator.dupeZ(u8, "monospace") },
+            .lua = .{
+                .session = .{
+                    .font = .{ .face = try allocator.dupeZ(u8, "monospace") },
+                    .session = self,
+                },
+            },
             .environ_map = environ_map,
             .io = io,
         },
@@ -585,7 +609,7 @@ pub fn init(io: std.Io, environ_map: *std.process.Environ.Map) SessionError!Sess
     };
 }
 
-pub fn attachEvents(self: *Session) SessionError!void {
+pub fn attachEvents(self: *Session) Error!void {
     signal_session = self;
 
     self.monitors.init();
@@ -594,7 +618,7 @@ pub fn attachEvents(self: *Session) SessionError!void {
 
     try self.input.init(self);
 
-    try self.config.setupLua();
+    try self.config.init();
 
     _ = try wl.Global.create(self.server, conpositor.IpcManagerV1, 1, *Session, self, IpcOutput.managerBind);
 
@@ -615,9 +639,11 @@ pub fn attachEvents(self: *Session) SessionError!void {
 
     self.output_manager.events.apply.add(&self.events.output_manager_apply_event);
     self.output_manager.events.@"test".add(&self.events.output_manager_test_event);
+
+    self.events.attached = true;
 }
 
-pub fn launch(self: *Session) SessionError!void {
+pub fn launch(self: *Session) Error!void {
     inline for ([_]std.c.SIG{
         .INT,
         .TERM,

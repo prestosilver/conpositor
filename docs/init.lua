@@ -1,7 +1,7 @@
 -- require some builtin libraries
-local gaps = require("conpositor.gaps")
-local funcs = require("conpositor.funcs")
-local mouse = require("conpositor.mouse")
+local gaps = require("lib.gaps")
+local funcs = require("lib.funcs")
+local mouse = require("lib.mouse")
 
 -- add this first in case of crash
 session:add_bind("AS", "Escape", funcs.quit())
@@ -288,15 +288,16 @@ client_rule({ appid = "SandEEE" }, { stack = stacks.c })
 client_rule({ appid = "steam" }, { stack = stacks.c })
 
 session:add_hook("startup", function(startup)
-    session:spawn("wlr-randr",
+    session:spawn("wlr-randr", {
         "--output", "eDP-1", "--pos", "2560,0",
-        "--output", "DP-4", "--mode", "2560x1080", "--pos", "0,0", "--preferred")
-    session:spawn("swww-daemon")
-    session:spawn("dunst")
-    session:spawn("waybar")
-    session:spawn("blueman-applet")
-    session:spawn("nm-applet")
-    session:spawn("/usr/lib/gsd-xsettings")
+        "--output", "DP-4", "--mode", "2560x1080", "--pos", "0,0", "--preferred"
+    })
+    session:spawn("swww-daemon", {})
+    session:spawn("dunst", {})
+    session:spawn("waybar", {})
+    session:spawn("blueman-applet", {})
+    session:spawn("nm-applet", {})
+    session:spawn("/usr/lib/gsd-xsettings", {})
 end)
 
 session:add_hook("add_monitor", function(monitor)

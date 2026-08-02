@@ -64,6 +64,20 @@ pub fn build(b: *std.Build) void {
     wlroots_dep.module("wlroots").optimize = optimize;
     wlroots_dep.module("wlroots").linkSystemLibrary("wlroots-0.20", .{});
 
+    // docgen step
+    const conpositor_docgen = b.addExecutable(.{
+        .name = "conpositor-docgen",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("conpositor/docgen.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{},
+        }),
+    });
+
+    const run_docgen = b.addRunArtifact(conpositor_docgen);
+    const docs_path = run_docgen.addOutputDirectoryArg("docs");
+
     // Conpositor its self
     const conpositor = b.addExecutable(.{
         .name = "conpositor",
@@ -93,12 +107,26 @@ pub fn build(b: *std.Build) void {
 
     const lib_step = b.addInstallDirectory(.{
         .source_dir = b.path("libs"),
-        .install_dir = .lib,
-        .install_subdir = "conpositor",
+        .install_dir = .{ .custom = "share/conpositor" },
+        .install_subdir = "lib",
+    });
+
+    const types_step = b.addInstallDirectory(.{
+        .source_dir = docs_path,
+        .install_dir = .{ .custom = "share/conpositor" },
+        .install_subdir = "types",
+    });
+
+    const config_step = b.addInstallDirectory(.{
+        .source_dir = b.path("config"),
+        .install_dir = .{ .custom = "share/conpositor" },
+        .install_subdir = "config",
     });
 
     const conpositor_step = b.addInstallArtifact(conpositor, .{});
     conpositor_step.step.dependOn(&lib_step.step);
+    conpositor_step.step.dependOn(&types_step.step);
+    conpositor_step.step.dependOn(&config_step.step);
 
     b.getInstallStep().dependOn(&conpositor_step.step);
 
@@ -124,7 +152,8 @@ pub fn build(b: *std.Build) void {
     const run_cmd = b.addRunArtifact(conpositor);
     run_cmd.step.dependOn(b.getInstallStep());
 
-    run_cmd.setEnvironmentVariable("CONPOSITOR_LIB_DIR", b.getInstallPath(.lib, ""));
+    run_cmd.setEnvironmentVariable("CONPOSITOR_LIB_DIR", b.getInstallPath(.{ .custom = "share/conpositor" }, ""));
+    // run_cmd.setEnvironmentVariable("CONPOSITOR_CONFIG_DIR", b.getInstallPath(.{ .custom = "share/conpositor" }, "config"));
 
     if (b.args) |args| run_cmd.addArgs(args);
 

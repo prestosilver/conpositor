@@ -41,8 +41,8 @@ local function release_mouse()
 end
 
 function M.setup(config)
-    session:add_hook("mouse_move", move_mouse)
-    session:add_hook("mouse_release", release_mouse)
+    session:hook("mouse_move", move_mouse)
+    session:hook("mouse_release", release_mouse)
 
     M.binds = M.binds or {}
     M.current_bind = M.current_bind or nil

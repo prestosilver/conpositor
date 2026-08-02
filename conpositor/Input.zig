@@ -9,6 +9,8 @@ const Session = @import("Session.zig");
 const Client = @import("Client.zig");
 const Config = @import("Config.zig");
 
+const LuaVector = @import("LuaTypes/Vector.zig");
+
 const Input = @This();
 
 const allocator = Config.allocator;
@@ -23,7 +25,7 @@ const CursorMode = enum {
     lua,
 };
 
-const MotionError = Config.ConfigError || cairo.Error;
+const MotionError = Config.Error || cairo.Error;
 
 const xkb_rules: xkb.RuleNames = .{
     .options = null,
@@ -94,6 +96,8 @@ const Events = struct {
     request_set_selection: wl.Listener(*wlr.Seat.event.RequestSetSelection) = .init(Events.setSelection),
 
     new_input_event: wl.Listener(*wlr.InputDevice) = .init(Events.newInput),
+
+    attached: bool = false,
 
     fn cursorMotion(listener: *wl.Listener(*wlr.Pointer.event.Motion), motion: *wlr.Pointer.event.Motion) void {
         const events: *Events = @fieldParentPtr("cursor_motion_event", listener);
@@ -409,6 +413,8 @@ pub fn init(self: *Input, session: *Session) !void {
 
     const relative_pointer_manager = try wlr.RelativePointerManagerV1.create(session.server);
 
+    self.events.attached = true;
+
     std.log.warn("TODO: virtual keyboards", .{});
 
     self.* = .{
@@ -473,12 +479,12 @@ pub fn motionNotify(
         }
     }
 
-    const data: Config.LuaVec = .{
+    const data: LuaVector = .{
         .x = self.cursor.x,
         .y = self.cursor.y,
     };
 
-    if (self.cursor_mode == .lua and try self.session.config.sendEvent(Config.LuaVec, .mouse_move, data))
+    if (self.cursor_mode == .lua and try self.session.config.sendEvent(LuaVector, .mouse_move, data))
         return;
 
     if (objects.surface == null and
@@ -701,4 +707,24 @@ fn newInput(self: *Input, device: *wlr.InputDevice) !void {
         caps.keyboard = true;
 
     self.seat.setCapabilities(caps);
+}
+
+pub fn deinit(self: *Input) void {
+    if (self.events.attached) {
+        self.events.cursor_motion_event.link.remove();
+        self.events.cursor_motion_absolute_event.link.remove();
+        self.events.cursor_button_event.link.remove();
+        self.events.cursor_axis_event.link.remove();
+        self.events.cursor_frame_event.link.remove();
+        self.events.create_pointer_constraint_event.link.remove();
+
+        self.events.request_set_cursor_event.link.remove();
+        self.events.set_cursor_shape_event.link.remove();
+        self.events.request_set_primary_selection.link.remove();
+        self.events.request_set_selection.link.remove();
+
+        self.events.new_input_event.link.remove();
+
+        self.events.attached = false;
+    }
 }

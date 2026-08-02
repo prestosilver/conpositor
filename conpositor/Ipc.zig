@@ -97,7 +97,8 @@ fn handleSessionRequestInternal(
             const return_command = try std.fmt.allocPrint(allocator, "return {s}", .{command});
             defer allocator.free(return_command);
 
-            const result = try session.config.run(return_command);
+            var result = try session.config.run(return_command);
+            defer result.deinit();
 
             if (result.failed)
                 resource.sendFail(result.result)

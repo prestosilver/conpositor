@@ -6,13 +6,25 @@ const Config = @import("Config.zig");
 const Session = @import("Session.zig");
 const Client = @import("Client.zig");
 
+const LuaTextModule = @import("LuaTypes/TextModule.zig");
+
 const Tab = @This();
 
 const allocator = Config.allocator;
 
-left_modules: std.array_list.Managed(Config.LuaModule) = .init(allocator),
-center_modules: std.array_list.Managed(Config.LuaModule) = .init(allocator),
-right_modules: std.array_list.Managed(Config.LuaModule) = .init(allocator),
+left_modules: std.array_list.Managed(LuaTextModule) = .init(allocator),
+center_modules: std.array_list.Managed(LuaTextModule) = .init(allocator),
+right_modules: std.array_list.Managed(LuaTextModule) = .init(allocator),
+
+pub fn deinit(self: *Tab) void {
+    for (self.left_modules.items) |*module| module.deinit();
+    for (self.center_modules.items) |*module| module.deinit();
+    for (self.right_modules.items) |*module| module.deinit();
+
+    self.left_modules.deinit();
+    self.center_modules.deinit();
+    self.right_modules.deinit();
+}
 
 pub fn getText(
     self: *Tab,

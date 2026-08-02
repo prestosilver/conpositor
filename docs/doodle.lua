@@ -1,7 +1,8 @@
 -- require some builtin libraries
-local gaps = require("conpositor.gaps")
-local funcs = require("conpositor.funcs")
-local mouse = require("conpositor.mouse")
+local gaps = require("lib.gaps")
+local funcs = require("lib.funcs")
+local mouse = require("lib.mouse")
+
 local mondo = require("mondo.colors")
 
 -- add this first in case of crash
@@ -29,11 +30,11 @@ local tags = { f1 = 1, f2 = 2, f3 = 3, f4 = 4 }
 local function layout(align, reverse)
     local align_id = 0
     local reverse_id = 0
-    
+
     if align == "right" then align_id = 1 end
     if align == "center" then align_id = 2 end
     if align == "left" then align_id = 3 end
-    
+
     if reverse == true then reverse_id = 0 end
     if reverse == false then reverse_id = 1 end
 
@@ -47,27 +48,27 @@ local function setup_abcd(layout, ab_split, in_ac_split, in_bd_split, flip)
 
     session.layouts[layout].children = {
         { -- bd
-            bounds = {ab_split, 0.0, 1.0, 1.0},
+            bounds = { ab_split, 0.0, 1.0, 1.0 },
             children = {
                 { -- b
-                    bounds = {0.0, 0.0, 1.0, bd_split},
+                    bounds = { 0.0, 0.0, 1.0, bd_split },
                     container = flip and stacks.d or stacks.b
                 },
                 { -- d
-                    bounds = {0.0, bd_split, 1.0, 1.0},
+                    bounds = { 0.0, bd_split, 1.0, 1.0 },
                     container = flip and stacks.b or stacks.d
                 }
             }
         },
         { -- ac
-            bounds = {0.0, 0.0, ab_split, 1.0},
+            bounds = { 0.0, 0.0, ab_split, 1.0 },
             children = {
                 { -- a
-                    bounds = {0.0, 0.0, 1.0, ac_split},
+                    bounds = { 0.0, 0.0, 1.0, ac_split },
                     container = flip and stacks.c or stacks.a
                 },
                 { -- c
-                    bounds = {0.0, ac_split, 1.0, 1.0},
+                    bounds = { 0.0, ac_split, 1.0, 1.0 },
                     container = flip and stacks.a or stacks.c
                 }
             }
@@ -75,18 +76,18 @@ local function setup_abcd(layout, ab_split, in_ac_split, in_bd_split, flip)
     }
 end
 
-local align_cycle = {{ }, { }}
-local reverse_cycle = {{ }, { }, { }}
+local align_cycle = { {}, {} }
+local reverse_cycle = { {}, {}, {} }
 local layout_names = {}
-for align_index, align in ipairs{"right", "center", "left"} do
+for align_index, align in ipairs { "right", "center", "left" } do
     local align_text
     if align == "right" then align_text = ">" end
     if align == "center" then align_text = "|" end
     if align == "left" then align_text = "<" end
-    for reverse_index, reverse in ipairs{true, false} do
+    for reverse_index, reverse in ipairs { true, false } do
         local brackets
-        if reverse == false then brackets = {"[", "]"} end
-        if reverse == true then brackets = {"]", "["} end
+        if reverse == false then brackets = { "[", "]" } end
+        if reverse == true then brackets = { "]", "[" } end
 
         local layout_index = layout(align, reverse)
 
@@ -98,7 +99,7 @@ for align_index, align in ipairs{"right", "center", "left"} do
 
         setup_abcd(layout_index, ab_split, ac_split, bd_split, reverse)
 
-        align_cycle[reverse_index][align_index] = layout(align, reverse) 
+        align_cycle[reverse_index][align_index] = layout(align, reverse)
         reverse_cycle[align_index][reverse_index] = layout(align, reverse)
     end
 end
@@ -241,7 +242,7 @@ local default_bars = {
     top = {
         palette = mondo.active,
 
-        left = { layout_module, tag_module,  },
+        left = { layout_module, tag_module, },
         center = { active_client_module },
         right = { time_module }
     }
@@ -329,7 +330,7 @@ local function client_rule(filter, rule)
         if rule.icon then client.icon = rule.icon end
         if rule.title then client.label = rule.title end
         if rule.border then client.border = rule.border end
-        if rule.module then client.modules =  rule.module end
+        if rule.module then client.modules = rule.module end
     end)
 end
 
@@ -357,9 +358,9 @@ client_rule({ appid = "steam" }, { stack = stacks.c })
 
 session:add_hooks {
     startup = function(status)
-    session:spawn("wlr-randr",
-        "--output", "eDP-1", "--pos", "2560,0",
-        "--output", "DP-4", "--mode", "2560x1080", "--pos", "0,0", "--preferred")
+        session:spawn("wlr-randr",
+            "--output", "eDP-1", "--pos", "2560,0",
+            "--output", "DP-4", "--mode", "2560x1080", "--pos", "0,0", "--preferred")
         session:spawn("swww-daemon")
         session:spawn("dunst")
         session:spawn("waybar")
@@ -378,3 +379,4 @@ function reload_colors()
     package.loaded["mondo.colors"] = nil
     require("mondo.colors")
 end
+

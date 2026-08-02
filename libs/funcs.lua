@@ -35,7 +35,7 @@ function M.set_client_border(size)
     return function()
         local client = session:active_client()
         if client then
-            client:set_border(size)
+            client.border = size
         end
     end
 end
@@ -46,7 +46,7 @@ function M.toggle_floating()
     return function()
         local client = session:active_client()
         if client then
-            client:set_floating(not client:get_floating())
+            client.floating = not client.floating
         end
     end
 end
@@ -57,7 +57,7 @@ function M.toggle_fullscreen()
     return function()
         local client = session:active_client()
         if client then
-          client:set_fullscreen(not client:get_fullscreen())
+            client.fullscreen = not client.fullscreen
         end
     end
 end
@@ -81,7 +81,7 @@ function M.set_monitor_tag(tag)
     return function()
         local monitor = session:active_monitor()
         if monitor then
-            monitor:set_tag(tag)
+            monitor.active_tag = tag
         end
     end
 end
@@ -94,7 +94,7 @@ function M.set_client_tag(tag)
     return function()
         local client = session:active_client()
         if client then
-            client:set_tag(tag)
+            client.tag = tag
         end
     end
 end
@@ -107,7 +107,7 @@ function M.set_client_stack(stack)
     return function()
         local client = session:active_client()
         if client then
-            client:set_stack(stack)
+            client.stack = stack
         end
     end
 end
@@ -117,7 +117,7 @@ function M.cycle_layout(direction, lists)
     local lists = lists
     return function()
         local monitor = session:active_monitor()
-        local current_layout = monitor:get_layout()
+        local current_layout = monitor.layout
         if monitor then
             for _, list in pairs(lists) do
                 for i, v in pairs(list) do
@@ -127,7 +127,7 @@ function M.cycle_layout(direction, lists)
                             idx = idx + #list
                         end
 
-                        monitor:set_layout(list[(idx % #list) + 1])
+                        monitor.layout = list[(idx % #list) + 1]
                         return
                     end
                 end
@@ -153,9 +153,19 @@ end
 --- @param program string The program to call
 --- @param args Any arguments to pass
 --- @return fun() # Returns a function callback
-function M.spawn(program, ...)
-    local program = program
-    local args = {...}
+function M.spawn(...)
+    local count = select('#', ...)
+
+    local program = select(1, ...)
+    local args = {}
+
+    if count > 1 then
+        for i = 2, count do
+            local value = select(i, ...)
+            args[i - 1] = value
+        end
+    end
+
     return function()
         session:spawn(program, args)
     end

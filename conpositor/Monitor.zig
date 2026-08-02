@@ -150,7 +150,7 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
 
     try session.updateMons();
 
-    _ = try session.config.sendEvent(Config.LuaMonitor, .add_monitor, .{ .child = result });
+    _ = try session.config.sendEvent(@import("LuaTypes/Monitor.zig"), .add_monitor, .{ .child = result });
 }
 
 pub fn close(self: *Monitor) !void {
@@ -225,7 +225,7 @@ pub fn setActiveTag(self: *Monitor, tag: u8) void {
         inline for (.{ old, self.tag }) |id| {
             resource.sendTag(
                 @intCast(id),
-                self.session.config.tags.items[id],
+                self.session.config.lua.session.tags.items[id],
                 if (self.tag == id) .active else .none,
                 0,
                 0,
@@ -338,7 +338,7 @@ pub fn setLayout(self: *Monitor, layout: ?*Layout) void {
     if (self.layout == layout)
         return;
 
-    if (self.session.config.layouts.items.len == 0)
+    if (self.session.config.lua.session.layouts.items.len == 0)
         return;
 
     self.layout = layout;
