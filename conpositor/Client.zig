@@ -1271,5 +1271,6 @@ fn deinit(self: *Client) void {
 
     self.tab.deinit();
 
+    self.session.config.destroy("Client", @import("LuaTypes/Client.zig"){ .child = self });
     allocator.destroy(self);
 }

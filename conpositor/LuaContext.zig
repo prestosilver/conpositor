@@ -53,6 +53,9 @@ pub const LuaType = struct {
         // the method table
         lua.newTable();
 
+        lua.autoPushFunction(self.impl.hash);
+        lua.setField(-2, "_hash");
+
         // the getter table
         lua.newTable();
 
@@ -176,38 +179,6 @@ pub const LUA_TYPES = [_]LuaType{
 
                 .binding_mode = .auto,
                 .kind = .setter,
-            },
-            // .{
-            //     .impl_name = "setIcon",
-            //     .lua_name = "icon",
-            //     .description = "Sets the icon of the client",
-
-            //     .binding_mode = .auto,
-            //     .kind = .setter,
-            // },
-            // .{
-            //     .impl_name = "getIcon",
-            //     .lua_name = "icon",
-            //     .description = "Sets the icon of the client",
-
-            //     .binding_mode = .auto,
-            //     .kind = .getter,
-            // },
-            .{
-                .impl_name = "setLabel",
-                .lua_name = "label",
-                .description = "Sets a label for the client",
-
-                .binding_mode = .auto,
-                .kind = .setter,
-            },
-            .{
-                .impl_name = "getLabel",
-                .lua_name = "label",
-                .description = "Gets a label for the client",
-
-                .binding_mode = .auto,
-                .kind = .getter,
             },
             .{
                 .impl_name = "getAppid",
@@ -534,4 +505,12 @@ pub fn init(self: *Self, path: []const u8) Error!void {
 pub fn deinit(self: *Self) void {
     self.session.deinit();
     self.lua.deinit();
+}
+
+pub fn destroy(self: *Self, kind: [:0]const u8, base: anytype) void {
+    _ = self.lua.getGlobal(kind);
+    _ = self.lua.getField(-1, "_destroy");
+    self.lua.pushAny(base) catch unreachable;
+    self.lua.protectedCall(.{ .args = 1, .results = 0 }) catch unreachable;
+    _ = self.lua.pop(-1);
 }

@@ -1,8 +1,12 @@
 _GenerateType = function(methods, getters, setters)
-    -- TODO: instances dosent work
     local instances = {}
 
     return {
+        _destroy = function(self)
+            local hash = self:_hash()
+            instances[hash] = nil
+        end,
+
         __index = (function(self, index)
             if getters[index] then
                 return getters[index](self.instance)
@@ -14,8 +18,9 @@ _GenerateType = function(methods, getters, setters)
                 end
             end
 
-            if instances[self.instance] then
-                return instances[self.instance][index]
+            local hash = self:_hash()
+            if instances[hash] then
+                return instances[hash][index]
             end
 
             return nil
@@ -37,11 +42,13 @@ _GenerateType = function(methods, getters, setters)
                 return
             end
 
-            if instances[self.instance] == nil then
-                instances[self.instance] = {}
+            local hash = self:_hash()
+
+            if instances[hash] == nil then
+                instances[hash] = {}
             end
 
-            instances[self.instance][index] = value
+            instances[hash][index] = value
         end)
     }
 end

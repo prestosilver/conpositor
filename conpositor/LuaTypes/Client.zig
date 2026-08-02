@@ -192,3 +192,7 @@ pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !Self {
 pub fn toLua(self: Self, lua: *Lua) void {
     LuaContext.pushT(lua, self, "Client");
 }
+
+pub fn hash(self: *Self) usize {
+    return @intFromPtr(self.child);
+}

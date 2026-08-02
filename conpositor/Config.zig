@@ -242,3 +242,7 @@ pub fn deinit(self: *Config) void {
 
     allocator.free(self.home_path);
 }
+
+pub fn destroy(self: *Config, kind: [:0]const u8, base: anytype) void {
+    self.lua.destroy(kind, base);
+}
