@@ -38,7 +38,7 @@ pub const LuaType = struct {
         description: []const u8,
 
         binding_mode: enum { raw, auto },
-        kind: enum { method, getter, setter } = .method,
+        kind: enum { function, method, getter, setter } = .method,
     };
 
     impl: type,
@@ -49,6 +49,9 @@ pub const LuaType = struct {
 
     pub inline fn addTo(comptime self: LuaType, lua: *Lua) Error!void {
         _ = lua.getGlobal("_GenerateType");
+
+        // the function table
+        lua.newTable();
 
         // the method table
         lua.newTable();
@@ -64,6 +67,7 @@ pub const LuaType = struct {
 
         inline for (self.methods) |method| {
             const index = switch (method.kind) {
+                .function => -5,
                 .method => -4,
                 .getter => -3,
                 .setter => -2,
@@ -99,7 +103,7 @@ pub const LuaType = struct {
             }
         }
 
-        lua.protectedCall(.{ .args = 3, .results = 1 }) catch |err| {
+        lua.protectedCall(.{ .args = 4, .results = 1 }) catch |err| {
             std.log.err("{s} Error: {s}", .{ @errorName(err), lua.toString(-1) catch "unknown" });
             lua.pop(1);
         };
@@ -107,32 +111,70 @@ pub const LuaType = struct {
         if (self.gc) |gc_method| {
             switch (gc_method.binding_mode) {
                 .raw => {
-                    lua.autoPushFunction(@field(self.impl, gc_method.impl_name));
-                    lua.setField(-2, "__gc");
-                },
-                .auto => {
                     lua.pushFunction(@field(self.impl, gc_method.impl_name));
                     lua.setField(-2, "__gc");
                 },
-                .setter, .setter => @compileError("gc method cannot be of type" ++ @tagName(gc_method.binding_mode)),
+                .auto => {
+                    lua.autoPushFunction(@field(self.impl, gc_method.impl_name));
+                    lua.setField(-2, "__gc");
+                },
             }
         }
 
-        if (@hasDecl(self.impl, "fromLua")) {
-            const Compare = struct {
-                fn eq(a: self.impl, b: self.impl) bool {
-                    return std.meta.eql(a, b);
-                }
-            };
-            lua.autoPushFunction(Compare.eq);
-            lua.setField(-2, "__eq");
-        }
+        const MetaMethods = struct {
+            fn eq(a: *self.impl, b: *self.impl) bool {
+                return a.hash() == b.hash();
+            }
+
+            pub fn toString(tmp_lua: *Lua) !c_int {
+                _ = tmp_lua.getField(-1, "instance");
+                const a = try tmp_lua.toAny(*self.impl, -1);
+
+                // panics on out of memory
+                const pushes = try std.fmt.allocPrint(allocator, "{f}", .{a});
+                defer allocator.free(pushes);
+
+                tmp_lua.pop(1);
+                tmp_lua.pop(1);
+
+                _ = tmp_lua.pushString(pushes);
+
+                return 1;
+            }
+        };
+        lua.autoPushFunction(MetaMethods.eq);
+        lua.setField(-2, "__eq");
+        lua.pushFunction(zlua.wrap(MetaMethods.toString));
+        lua.setField(-2, "__tostring");
 
         lua.setGlobal(self.lua_name);
     }
 };
 
 pub const LUA_TYPES = [_]LuaType{
+    .{
+        .impl = @import("LuaTypes/TextModule.zig"),
+        .lua_name = "TextModule",
+        .description =
+        \\ A text module for client bars
+        ,
+        .gc = .{
+            .impl_name = "luaGC",
+            .lua_name = "__gc",
+            .description = "Frees",
+            .binding_mode = .auto,
+        },
+        .methods = &.{
+            .{
+                .impl_name = "new",
+                .lua_name = "new",
+                .description = "Creates a new text module",
+
+                .binding_mode = .auto,
+                .kind = .function,
+            },
+        },
+    },
     .{
         .impl = @import("LuaTypes/Client.zig"),
         .lua_name = "Client",
@@ -269,8 +311,223 @@ pub const LUA_TYPES = [_]LuaType{
             },
         },
     },
+    .{
+        .impl = @import("LuaTypes/Monitor.zig"),
+        .lua_name = "Monitor",
+        .description =
+        \\ A monitor object
+        ,
+        .methods = &.{
+            .{
+                .impl_name = "getPosition",
+                .lua_name = "position",
+                .description = "Gets the position of a monitor",
+
+                .binding_mode = .auto,
+                .kind = .getter,
+            },
+            .{
+                .impl_name = "getActiveTag",
+                .lua_name = "active_tag",
+                .description = "Gets the active tag of the monitor",
+
+                .binding_mode = .auto,
+                .kind = .getter,
+            },
+            .{
+                .impl_name = "setActiveTag",
+                .lua_name = "active_tag",
+                .description = "Sets the active tag of the monitor",
+
+                .binding_mode = .auto,
+                .kind = .setter,
+            },
+            .{
+                .impl_name = "getLayout",
+                .lua_name = "layout",
+                .description = "Gets the layout of the monitor",
+
+                .binding_mode = .auto,
+                .kind = .getter,
+            },
+            .{
+                .impl_name = "setLayout",
+                .lua_name = "layout",
+                .description = "Sets the layout of the monitor",
+
+                .binding_mode = .auto,
+                .kind = .setter,
+            },
+            .{
+                .impl_name = "setInnerGaps",
+                .lua_name = "inner_gaps",
+                .description = "Sets the inner gaps of the monitor",
+
+                .binding_mode = .auto,
+                .kind = .setter,
+            },
+            .{
+                .impl_name = "setOuterGaps",
+                .lua_name = "outer_gaps",
+                .description = "Sets the outer gaps of the monitor",
+
+                .binding_mode = .auto,
+                .kind = .setter,
+            },
+        },
+    },
+    .{
+        .impl = @import("LuaTypes/Session.zig"),
+        .lua_name = "Session",
+        .description =
+        \\ The session object
+        ,
+        .methods = &.{
+            .{
+                .impl_name = "getDebug",
+                .lua_name = "debug",
+                .description = "True if inside a debug build",
+
+                .binding_mode = .auto,
+                .kind = .getter,
+            },
+            .{
+                .impl_name = "quit",
+                .lua_name = "quit",
+                .description = "Quit the current session",
+
+                .binding_mode = .auto,
+            },
+            .{
+                .impl_name = "getActiveClient",
+                .lua_name = "active_client",
+                .description = "Returns the current active client",
+
+                .binding_mode = .auto,
+            },
+            .{
+                .impl_name = "getActiveMonitor",
+                .lua_name = "active_monitor",
+                .description = "Returns the current active monitor",
+
+                .binding_mode = .auto,
+            },
+            .{
+                .impl_name = "cycleFocus",
+                .lua_name = "cycle_focus",
+                .description = "Cycles the current stack",
+
+                .binding_mode = .auto,
+            },
+            .{
+                .impl_name = "spawn",
+                .lua_name = "spawn",
+                .description = "Spawns a child process",
+
+                .binding_mode = .auto,
+            },
+            .{
+                .impl_name = "setFont",
+                .lua_name = "set_font",
+                .description = "Sets the sessions font",
+
+                .binding_mode = .auto,
+            },
+            .{
+                .impl_name = "newLayout",
+                .lua_name = "new_layout",
+                .description = "Creates a new layout",
+
+                .binding_mode = .auto,
+            },
+            .{
+                .impl_name = "newTag",
+                .lua_name = "new_tag",
+                .description = "Creates a new tag",
+
+                .binding_mode = .auto,
+            },
+            .{
+                .impl_name = "setColor",
+                .lua_name = "set_color",
+                .description = "Sets a palette color",
+
+                .binding_mode = .auto,
+            },
+            .{
+                .impl_name = "addBind",
+                .lua_name = "add_bind",
+                .description = "Adds a key bind",
+
+                .binding_mode = .raw,
+            },
+            .{
+                .impl_name = "addMouseBind",
+                .lua_name = "add_mouse_bind",
+                .description = "Adds a mouse bind",
+
+                .binding_mode = .raw,
+            },
+            .{
+                .impl_name = "addRule",
+                .lua_name = "add_rule",
+                .description = "Adds a client rule",
+
+                .binding_mode = .raw,
+            },
+            .{
+                .impl_name = "addHook",
+                .lua_name = "hook",
+                .description = "Adds a hook to the current session",
+
+                .binding_mode = .raw,
+            },
+        },
+    },
+    .{
+        .impl = @import("LuaTypes/Container.zig"),
+        .lua_name = "Container",
+        .description =
+        \\ A container object
+        ,
+        .methods = &.{
+            .{
+                .impl_name = "setStack",
+                .lua_name = "stack",
+                .description = "Sets the stack to display in the container",
+
+                .binding_mode = .auto,
+                .kind = .setter,
+            },
+            .{
+                .impl_name = "addChild",
+                .lua_name = "add_child",
+                .description = "Adds a child stack to the stack",
+
+                .binding_mode = .auto,
+            },
+        },
+    },
+    .{
+        .impl = @import("LuaTypes/Layout.zig"),
+        .lua_name = "Layout",
+        .description =
+        \\ A layout object
+        ,
+        .methods = &.{
+            .{
+                .impl_name = "getRoot",
+                .lua_name = "root",
+                .description = "Gets the root container of the layout",
+
+                .binding_mode = .auto,
+                .kind = .getter,
+            },
+        },
+    },
 };
 
+is_init: bool = false,
 lua: *Lua = undefined,
 session: LuaSession,
 
@@ -290,73 +547,6 @@ pub fn pushT(lua: *Lua, self: anytype, name: [:0]const u8) void {
 
 fn roFunction() !void {
     return error.AssignToReadOnly;
-}
-
-// TODO: Dont force snake case here
-inline fn globalType(lua: *Lua, comptime T: type, name: [:0]const u8) Error!void {
-    const info = @typeInfo(T.LuaMethods);
-
-    if (info != .@"struct") @compileError("expected struct for pushtype");
-
-    // create my method table
-    lua.newTable();
-
-    inline for (info.@"struct".decls) |decl| {
-        if (comptime std.mem.startsWith(u8, decl.name, "raw_")) {
-            const new_name = decl.name[4..];
-
-            const field_value = @field(T.LuaMethods, decl.name);
-            const field_type = @TypeOf(field_value);
-            const field_info = @typeInfo(field_type);
-            switch (field_info) {
-                .@"fn" => {
-                    lua.pushFunction(zlua.wrap(field_value));
-                    lua.setField(-2, new_name);
-                },
-                else => {},
-            }
-        } else {
-            const new_name = decl.name;
-
-            const field_value = @field(T.LuaMethods, decl.name);
-            const field_type = @TypeOf(field_value);
-            const field_info = @typeInfo(field_type);
-            switch (field_info) {
-                .@"fn" => {
-                    lua.autoPushFunction(field_value);
-                    lua.setField(-2, new_name);
-                },
-                else => {},
-            }
-        }
-    }
-
-    lua.newTable();
-    lua.autoPushFunction(roFunction);
-    lua.setField(-2, "__new_index");
-    lua.setMetatable(-2);
-
-    try lua.newMetatable(name);
-    lua.pushValue(-2);
-    lua.setField(-2, "__index");
-
-    if (@hasDecl(T, "luaGC")) {
-        lua.autoPushFunction(T.luaGC);
-        lua.setField(-2, "__gc");
-    }
-
-    if (@hasDecl(T, "fromLua")) {
-        const Compare = struct {
-            fn eq(a: T, b: T) bool {
-                return std.meta.eql(a, b);
-            }
-        };
-        lua.autoPushFunction(Compare.eq);
-        lua.setField(-2, "__eq");
-    }
-    lua.pop(1);
-
-    lua.setGlobal(name);
 }
 
 pub fn sendEvent(self: *Self, comptime T: type, event_id: LuaSession.Event, data: T) Error!bool {
@@ -486,18 +676,20 @@ pub fn init(self: *Self, path: []const u8) Error!void {
     inline for (LUA_TYPES) |lua_type|
         try lua_type.addTo(self.lua);
 
-    try globalType(self.lua, @import("LuaTypes/Session.zig"), "Session");
-    try globalType(self.lua, @import("LuaTypes/Container.zig"), "Container");
-    try globalType(self.lua, @import("LuaTypes/Layout.zig"), "Layout");
-    try globalType(self.lua, @import("LuaTypes/Monitor.zig"), "Monitor");
-    try globalType(self.lua, @import("LuaTypes/Stack.zig"), "Stack");
-    try globalType(self.lua, @import("LuaTypes/Tag.zig"), "Tag");
-    try globalType(self.lua, @import("LuaTypes/ClientFilter.zig"), "ClientFilter");
-    try globalType(self.lua, @import("LuaTypes/TextModule.zig"), "TextModule");
+    self.lua.newTable();
 
-    try self.lua.pushAny(&self.session);
-    self.lua.setMetatableRegistry("Session");
+    self.lua.pushLightUserdata(&self.session);
+    self.lua.setField(-2, "instance");
+
+    self.lua.pushNil();
+    self.lua.setField(-2, "fields");
+
+    _ = self.lua.getGlobal("Session");
+    self.lua.setMetatable(-2);
+
     self.lua.setGlobal("session");
+
+    self.is_init = true;
 
     std.log.info("Init lua state", .{});
 }
@@ -505,12 +697,16 @@ pub fn init(self: *Self, path: []const u8) Error!void {
 pub fn deinit(self: *Self) void {
     self.session.deinit();
     self.lua.deinit();
+
+    self.is_init = false;
 }
 
 pub fn destroy(self: *Self, kind: [:0]const u8, base: anytype) void {
+    if (!self.is_init) return;
+
     _ = self.lua.getGlobal(kind);
     _ = self.lua.getField(-1, "_destroy");
     self.lua.pushAny(base) catch unreachable;
     self.lua.protectedCall(.{ .args = 1, .results = 0 }) catch unreachable;
-    _ = self.lua.pop(-1);
+    _ = self.lua.pop(1);
 }

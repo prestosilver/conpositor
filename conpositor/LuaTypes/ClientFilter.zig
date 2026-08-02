@@ -10,8 +10,6 @@ const Self = @This();
 title: ?[]const u8,
 appid: ?[]const u8,
 
-pub const LuaMethods = struct {};
-
 pub fn matches(self: *const Self, title: []const u8, appid: []const u8) bool {
     if (self.title) |trg_title|
         if (!std.mem.eql(u8, trg_title, title))

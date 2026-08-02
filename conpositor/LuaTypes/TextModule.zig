@@ -3,6 +3,7 @@ const zlua = @import("zlua");
 
 const Config = @import("../Config.zig");
 const Client = @import("../Client.zig");
+const LuaContext = @import("../LuaContext.zig");
 
 const LuaClosure = @import("Closure.zig");
 const LuaClient = @import("Client.zig");
@@ -15,16 +16,14 @@ const Self = @This();
 calls: LuaClosure,
 lua: *Lua,
 
-pub const LuaMethods = struct {
-    pub fn new(text: LuaClosure) Self {
-        std.log.debug("New lua text module {f}", .{text});
+pub fn new(text: LuaClosure) Self {
+    std.log.debug("New lua text module {f}", .{text});
 
-        return .{
-            .calls = text,
-            .lua = text.lua,
-        };
-    }
-};
+    return .{
+        .calls = text,
+        .lua = text.lua,
+    };
+}
 
 pub fn getText(self: *Self, client: *Client) ![:0]const u8 {
     const lua = self.lua;
@@ -63,13 +62,17 @@ pub fn format(self: Self, writer: *std.Io.Writer) !void {
 }
 
 pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !Self {
-    const result = try lua.toUserdata(Self, index);
+    _ = lua.getField(index, "instance");
+    const result = try lua.toUserdata(Self, -1);
+    lua.pop(1);
+
     return result.*;
 }
 
-pub fn toLua(self: Self, lua: *Lua) !void {
-    const tmp = lua.newUserdata(Self, 1);
-    tmp.* = self;
+pub fn toLua(self: Self, lua: *Lua) void {
+    LuaContext.pushT(lua, self, "TextModule");
+}
 
-    lua.setMetatableRegistry("TextModule");
+pub fn hash(self: *const Self) usize {
+    return @intFromPtr(self);
 }

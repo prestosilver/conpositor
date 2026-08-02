@@ -9,8 +9,6 @@ const Self = @This();
 
 id: u8,
 
-pub const LuaMethods = struct {};
-
 pub fn format(self: Self, writer: *std.Io.Writer) !void {
     try writer.print("Tag#{}", .{self.id});
 }

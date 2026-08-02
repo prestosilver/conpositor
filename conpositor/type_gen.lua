@@ -1,7 +1,7 @@
-_GenerateType = function(methods, getters, setters)
+_GenerateType = function(functions, methods, getters, setters)
     local instances = {}
 
-    return {
+    result = {
         _destroy = function(self)
             local hash = self:_hash()
             instances[hash] = nil
@@ -51,4 +51,10 @@ _GenerateType = function(methods, getters, setters)
             instances[hash][index] = value
         end)
     }
+
+    setmetatable(result, {
+        __index = functions,
+    });
+
+    return result;
 end

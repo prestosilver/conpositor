@@ -6,6 +6,7 @@ const xkb = @import("xkbcommon");
 const Config = @import("../Config.zig");
 const Layout = @import("../Layout.zig");
 const Session = @import("../Session.zig");
+const LuaContext = @import("../LuaContext.zig");
 
 const LuaClosure = @import("Closure.zig");
 const LuaTextModule = @import("TextModule.zig");
@@ -92,273 +93,271 @@ rules: std.array_list.Managed(struct { filter: LuaClientFilter, calls: LuaClosur
 // TODO: Hash Map
 events: std.array_list.Managed(struct { event: Event, calls: LuaClosure }) = .init(allocator),
 
-pub const LuaMethods = struct {
-    pub fn is_debug() bool {
-        return @import("builtin").mode == .Debug;
+pub fn getDebug() bool {
+    return @import("builtin").mode == .Debug;
+}
+
+pub fn quit(self: *Self) !void {
+    self.session.quit();
+}
+
+pub fn getActiveClient(self: *Self) ?LuaClient {
+    return .{
+        .child = self.session.focusedClient() orelse return null,
+    };
+}
+
+pub fn getActiveMonitor(self: *Self) ?LuaMonitor {
+    return .{
+        .child = self.session.focusedMonitor orelse return null,
+    };
+}
+
+pub fn cycleFocus(self: *Self, dir: i32) !void {
+    if (dir == 1)
+        try self.session.focusStack(.forward)
+    else if (dir == -1)
+        try self.session.focusStack(.backward)
+    else
+        return error.BadCycleDirection;
+}
+
+// TODO: hide from lua
+fn spawnThread(self: *Self, name: [:0]const u8, args: [][*:0]const u8) void {
+    const argv = allocator.alloc([]const u8, args.len + 1) catch unreachable;
+
+    argv[0] = @ptrCast(name);
+    for (args, argv[1..]) |in, *out| {
+        out.* = std.mem.span(in);
     }
 
-    pub fn quit(self: *Self) !void {
-        self.session.quit();
-    }
+    const child = std.process.spawn(self.session.io, .{
+        .argv = argv,
+        .environ_map = self.session.environ_map,
 
-    pub fn active_client(self: *Self) ?LuaClient {
-        return .{
-            .child = self.session.focusedClient() orelse return null,
-        };
-    }
+        .pgid = 0,
+        .stderr = .ignore,
+        .stdout = .ignore,
+        .stdin = .ignore,
+    }) catch return;
+    allocator.free(argv);
 
-    pub fn active_monitor(self: *Self) ?LuaMonitor {
-        return .{
-            .child = self.session.focusedMonitor orelse return null,
-        };
-    }
+    _ = child;
 
-    pub fn cycle_focus(self: *Self, dir: i32) !void {
-        if (dir == 1)
-            try self.session.focusStack(.forward)
-        else if (dir == -1)
-            try self.session.focusStack(.backward)
-        else
-            return error.BadCycleDirection;
-    }
+    // At this point we dont care what the result is
+    //_ = child.wait(self.session.io) catch undefined;
+}
 
-    // TODO: hide from lua
-    fn spawnThread(self: *Self, name: [:0]const u8, args: [][*:0]const u8) void {
-        const argv = allocator.alloc([]const u8, args.len + 1) catch unreachable;
+pub fn spawn(self: *Self, name: [:0]const u8, args: [][*:0]const u8) !void {
+    const thread = try std.Thread.spawn(.{
+        .allocator = allocator,
+    }, spawnThread, .{ self, name, args });
+    thread.detach();
+}
 
-        argv[0] = @ptrCast(name);
-        for (args, argv[1..]) |in, *out| {
-            out.* = std.mem.span(in);
+pub fn setFont(self: *Self, face: []const u8, size: f32) !void {
+    self.font.deinit();
+
+    self.font = .{
+        .face = try allocator.dupeZ(u8, face),
+        .size = @intFromFloat(size),
+    };
+
+    std.log.debug("Set session font to {f}", .{self.font});
+}
+
+// TODO: move layout storage to lua
+pub fn newLayout(self: *Self, name: []const u8) !LuaLayout {
+    const container = try allocator.create(Layout.Container);
+
+    container.* = .{
+        .stack = null,
+        .size = .{ .x_min = 0, .x_max = 1, .y_min = 0, .y_max = 1 },
+        .children = &.{},
+    };
+
+    const layout = try allocator.create(Layout);
+
+    layout.* = .{
+        .name = try allocator.dupeZ(u8, name),
+        .container = container,
+    };
+
+    try self.layouts.append(layout);
+
+    return .{ .child = layout };
+}
+
+// TODO: Convert to indexes instead of name, that way the names will be lua defined.
+pub fn newTag(self: *Self, name: [:0]const u8) !LuaTag {
+    const name_dup = try allocator.dupeZ(u8, name);
+    try self.tags.append(name_dup);
+
+    std.log.debug("Create session tag {s}", .{name_dup});
+
+    return .{ .id = @intCast(self.tags.items.len - 1) };
+}
+
+pub fn setColor(self: *Self, active: bool, palette_name: []const u8, color_name: []const u8) !void {
+    var r: f32 = 1.0;
+    var g: f32 = 1.0;
+    var b: f32 = 1.0;
+    var a: f32 = 1.0;
+
+    if (color_name.len == 9) {
+        if (color_name[0] != '#')
+            return error.BadColor;
+
+        const color = try std.fmt.parseInt(u32, color_name[1..], 16);
+        r = @as(f32, @floatFromInt((color >> 24) & 0xff)) / 255;
+        g = @as(f32, @floatFromInt((color >> 16) & 0xff)) / 255;
+        b = @as(f32, @floatFromInt((color >> 8) & 0xff)) / 255;
+        a = @as(f32, @floatFromInt((color >> 0) & 0xff)) / 255;
+    } else if (color_name.len == 7) {
+        if (color_name[0] != '#')
+            return error.BadColor;
+
+        const color = try std.fmt.parseInt(u32, color_name[1..], 16);
+        r = @as(f32, @floatFromInt((color >> 16) & 0xff)) / 255;
+        g = @as(f32, @floatFromInt((color >> 8) & 0xff)) / 255;
+        b = @as(f32, @floatFromInt((color >> 0) & 0xff)) / 255;
+        a = 1.0;
+    } else return error.BadColor;
+
+    const palette = std.meta.stringToEnum(PaletteColor, palette_name) orelse return error.BadLayer;
+
+    if (active)
+        self.active_colors.set(palette, .{ r, g, b, a })
+    else
+        self.inactive_colors.set(palette, .{ r, g, b, a });
+
+    std.log.debug("Add color {s} to pallette {s} as the {s} color with rgba ({} {} {} {})", .{ color_name, palette_name, if (active) "active" else "inactive", r, g, b, a });
+
+    try self.session.reloadColors();
+}
+
+pub fn addBind(lua: *Lua) !i32 {
+    const old_top = lua.getTop();
+
+    const self = lua.toAny(*Self, -4) catch lua.raiseErrorStr("Not a Session", .{});
+    const mod_names = lua.toString(-3) catch lua.raiseErrorStr("Not a string", .{});
+    const key_name = lua.toString(-2) catch lua.raiseErrorStr("Not a string", .{});
+    const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
+    errdefer calls.deinit();
+
+    var mods: wlr.Keyboard.ModifierMask = .{};
+
+    for (mod_names) |m| {
+        switch (std.ascii.toLower(m)) {
+            'c' => mods.ctrl = true,
+            's' => mods.shift = true,
+            'l' => mods.logo = true,
+            'a' => mods.alt = true,
+            else => {},
         }
-
-        const child = std.process.spawn(self.session.io, .{
-            .argv = argv,
-            .environ_map = self.session.environ_map,
-
-            .pgid = 0,
-            .stderr = .ignore,
-            .stdout = .ignore,
-            .stdin = .ignore,
-        }) catch return;
-        allocator.free(argv);
-
-        _ = child;
-
-        // At this point we dont care what the result is
-        //_ = child.wait(self.session.io) catch undefined;
     }
 
-    pub fn spawn(self: *Self, name: [:0]const u8, args: [][*:0]const u8) !void {
-        const thread = try std.Thread.spawn(.{
-            .allocator = allocator,
-        }, spawnThread, .{ self, name, args });
-        thread.detach();
-    }
-
-    pub fn set_font(self: *Self, face: []const u8, size: f32) !void {
-        self.font.deinit();
-
-        self.font = .{
-            .face = try allocator.dupeZ(u8, face),
-            .size = @intFromFloat(size),
-        };
-
-        std.log.debug("Set session font to {f}", .{self.font});
-    }
-
-    // TODO: move layout storage to lua
-    pub fn add_layout(self: *Self, name: []const u8) !LuaLayout {
-        const container = try allocator.create(Layout.Container);
-
-        container.* = .{
-            .stack = null,
-            .size = .{ .x_min = 0, .x_max = 1, .y_min = 0, .y_max = 1 },
-            .children = &.{},
-        };
-
-        const layout = try allocator.create(Layout);
-
-        layout.* = .{
-            .name = try allocator.dupeZ(u8, name),
-            .container = container,
-        };
-
-        try self.layouts.append(layout);
-
-        return .{ .child = layout };
-    }
-
-    // TODO: Convert to indexes instead of name, that way the names will be lua defined.
-    pub fn new_tag(self: *Self, name: [:0]const u8) !LuaTag {
-        const name_dup = try allocator.dupeZ(u8, name);
-        try self.tags.append(name_dup);
-
-        std.log.debug("Create session tag {s}", .{name_dup});
-
-        return .{ .id = @intCast(self.tags.items.len - 1) };
-    }
-
-    pub fn set_color(self: *Self, active: bool, palette_name: []const u8, color_name: []const u8) !void {
-        var r: f32 = 1.0;
-        var g: f32 = 1.0;
-        var b: f32 = 1.0;
-        var a: f32 = 1.0;
-
-        if (color_name.len == 9) {
-            if (color_name[0] != '#')
-                return error.BadColor;
-
-            const color = try std.fmt.parseInt(u32, color_name[1..], 16);
-            r = @as(f32, @floatFromInt((color >> 24) & 0xff)) / 255;
-            g = @as(f32, @floatFromInt((color >> 16) & 0xff)) / 255;
-            b = @as(f32, @floatFromInt((color >> 8) & 0xff)) / 255;
-            a = @as(f32, @floatFromInt((color >> 0) & 0xff)) / 255;
-        } else if (color_name.len == 7) {
-            if (color_name[0] != '#')
-                return error.BadColor;
-
-            const color = try std.fmt.parseInt(u32, color_name[1..], 16);
-            r = @as(f32, @floatFromInt((color >> 16) & 0xff)) / 255;
-            g = @as(f32, @floatFromInt((color >> 8) & 0xff)) / 255;
-            b = @as(f32, @floatFromInt((color >> 0) & 0xff)) / 255;
-            a = 1.0;
-        } else return error.BadColor;
-
-        const palette = std.meta.stringToEnum(PaletteColor, palette_name) orelse return error.BadLayer;
-
-        if (active)
-            self.active_colors.set(palette, .{ r, g, b, a })
-        else
-            self.inactive_colors.set(palette, .{ r, g, b, a });
-
-        std.log.debug("Add color {s} to pallette {s} as the {s} color with rgba ({} {} {} {})", .{ color_name, palette_name, if (active) "active" else "inactive", r, g, b, a });
-
-        try self.session.reloadColors();
-    }
-
-    pub fn raw_add_bind(lua: *Lua) !i32 {
-        const old_top = lua.getTop();
-
-        const self = lua.toAny(*Self, -4) catch lua.raiseErrorStr("Not a Session", .{});
-        const mod_names = lua.toString(-3) catch lua.raiseErrorStr("Not a string", .{});
-        const key_name = lua.toString(-2) catch lua.raiseErrorStr("Not a string", .{});
-        const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
-        errdefer calls.deinit();
-
-        var mods: wlr.Keyboard.ModifierMask = .{};
-
-        for (mod_names) |m| {
-            switch (std.ascii.toLower(m)) {
-                'c' => mods.ctrl = true,
-                's' => mods.shift = true,
-                'l' => mods.logo = true,
-                'a' => mods.alt = true,
-                else => {},
-            }
-        }
-
-        {
-            const key: BindData = .{
-                .key = xkb.Keysym.fromName(key_name, .case_insensitive),
-                .mods = mods,
-            };
-
-            if (try self.binds.fetchPut(key, calls)) |value|
-                value.value.deinit();
-
-            std.log.debug("Created bind for {any} {f}", .{ mods, key });
-        }
-
-        if (old_top != lua.getTop() + 0)
-            return error.LuaError;
-
-        return 0;
-    }
-
-    pub fn raw_add_mouse(lua: *Lua) !i32 {
-        const old_top = lua.getTop();
-
-        const self = lua.toAny(*Self, -4) catch lua.raiseErrorStr("Not a Session", .{});
-        const mod_names = lua.toString(-3) catch lua.raiseErrorStr("Mods not a string", .{});
-        const key_name = lua.toString(-2) catch lua.raiseErrorStr("Button not a string", .{});
-        const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
-        errdefer calls.deinit();
-
-        var mods: wlr.Keyboard.ModifierMask = .{};
-
-        for (mod_names) |m| {
-            switch (std.ascii.toLower(m)) {
-                'c' => mods.ctrl = true,
-                's' => mods.shift = true,
-                'l' => mods.logo = true,
-                'a' => mods.alt = true,
-                else => {},
-            }
-        }
-
-        const button: u32 = if (std.mem.eql(u8, key_name, "Left"))
-            272
-        else if (std.mem.eql(u8, key_name, "Right"))
-            273
-        else
-            return error.InvalidMouseButton;
-
-        const key: MouseBindData = .{
-            .button = button,
+    {
+        const key: BindData = .{
+            .key = xkb.Keysym.fromName(key_name, .case_insensitive),
             .mods = mods,
         };
 
-        if (try self.mouse_binds.fetchPut(key, calls)) |value|
+        if (try self.binds.fetchPut(key, calls)) |value|
             value.value.deinit();
 
-        std.log.debug("Set mouse bind for {f}", .{key});
-
-        if (old_top != lua.getTop() + 0)
-            return error.LuaError;
-
-        return 0;
+        std.log.debug("Created bind for {any} {f}", .{ mods, key });
     }
 
-    pub fn raw_add_rule(lua: *Lua) !i32 {
-        const old_top = lua.getTop();
+    if (old_top != lua.getTop() + 0)
+        return error.LuaError;
 
-        const self = lua.toAny(*Self, -3) catch lua.raiseErrorStr("Not a Session", .{});
-        const filter = lua.toAny(LuaClientFilter, -2) catch lua.raiseErrorStr("Not a lua filter", .{});
-        const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
-        errdefer calls.deinit();
+    return 0;
+}
 
-        try self.rules.append(.{
-            .filter = filter,
-            .calls = calls,
-        });
+pub fn addMouseBind(lua: *Lua) !i32 {
+    const old_top = lua.getTop();
 
-        if (old_top != lua.getTop() + 0)
-            return error.LuaError;
+    const self = lua.toAny(*Self, -4) catch lua.raiseErrorStr("Not a Session", .{});
+    const mod_names = lua.toString(-3) catch lua.raiseErrorStr("Mods not a string", .{});
+    const key_name = lua.toString(-2) catch lua.raiseErrorStr("Button not a string", .{});
+    const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
+    errdefer calls.deinit();
 
-        return 0;
+    var mods: wlr.Keyboard.ModifierMask = .{};
+
+    for (mod_names) |m| {
+        switch (std.ascii.toLower(m)) {
+            'c' => mods.ctrl = true,
+            's' => mods.shift = true,
+            'l' => mods.logo = true,
+            'a' => mods.alt = true,
+            else => {},
+        }
     }
 
-    pub fn raw_add_hook(lua: *Lua) !i32 {
-        const old_top = lua.getTop();
+    const button: u32 = if (std.mem.eql(u8, key_name, "Left"))
+        272
+    else if (std.mem.eql(u8, key_name, "Right"))
+        273
+    else
+        return error.InvalidMouseButton;
 
-        const self = lua.toAny(*Self, -3) catch lua.raiseErrorStr("Not a Session", .{});
-        const event_name = lua.toString(-2) catch lua.raiseErrorStr("Not a string", .{});
-        const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
-        errdefer calls.deinit();
+    const key: MouseBindData = .{
+        .button = button,
+        .mods = mods,
+    };
 
-        const event_id = std.meta.stringToEnum(Event, event_name) orelse return error.BadEventName;
+    if (try self.mouse_binds.fetchPut(key, calls)) |value|
+        value.value.deinit();
 
-        try self.events.append(.{
-            .event = event_id,
-            .calls = calls,
-        });
+    std.log.debug("Set mouse bind for {f}", .{key});
 
-        if (old_top != lua.getTop() + 0)
-            return error.LuaError;
+    if (old_top != lua.getTop() + 0)
+        return error.LuaError;
 
-        return 0;
-    }
-};
+    return 0;
+}
+
+pub fn addRule(lua: *Lua) !i32 {
+    const old_top = lua.getTop();
+
+    const self = lua.toAny(*Self, -3) catch lua.raiseErrorStr("Not a Session", .{});
+    const filter = lua.toAny(LuaClientFilter, -2) catch lua.raiseErrorStr("Not a lua filter", .{});
+    const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
+    errdefer calls.deinit();
+
+    try self.rules.append(.{
+        .filter = filter,
+        .calls = calls,
+    });
+
+    if (old_top != lua.getTop() + 0)
+        return error.LuaError;
+
+    return 0;
+}
+
+pub fn addHook(lua: *Lua) !i32 {
+    const old_top = lua.getTop();
+
+    const self = lua.toAny(*Self, -3) catch lua.raiseErrorStr("Not a Session", .{});
+    const event_name = lua.toString(-2) catch lua.raiseErrorStr("Not a string", .{});
+    const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
+    errdefer calls.deinit();
+
+    const event_id = std.meta.stringToEnum(Event, event_name) orelse return error.BadEventName;
+
+    try self.events.append(.{
+        .event = event_id,
+        .calls = calls,
+    });
+
+    if (old_top != lua.getTop() + 0)
+        return error.LuaError;
+
+    return 0;
+}
 
 pub fn sendEvent(self: *Self, comptime T: type, lua: *Lua, event_id: Event, data: T) Error!bool {
     //var result = false;
@@ -379,6 +378,10 @@ pub fn sendEvent(self: *Self, comptime T: type, lua: *Lua, event_id: Event, data
     }
 
     return true;
+}
+
+pub fn format(_: Self, writer: *std.Io.Writer) !void {
+    try writer.print("Session", .{});
 }
 
 pub fn deinit(self: *Self) void {
@@ -417,4 +420,9 @@ pub fn deinit(self: *Self) void {
     self.rules.deinit();
     self.events.deinit();
     self.font.deinit();
+}
+
+pub fn hash(_: *const Self) usize {
+    // This is a singleton
+    return 0;
 }

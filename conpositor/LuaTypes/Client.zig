@@ -185,7 +185,10 @@ pub fn format(self: Self, writer: *std.Io.Writer) !void {
 }
 
 pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !Self {
-    const result = try lua.toUserdata(Self, index);
+    _ = lua.getField(index, "instance");
+    const result = try lua.toUserdata(Self, -1);
+    lua.pop(1);
+
     return result.*;
 }
 
@@ -193,6 +196,6 @@ pub fn toLua(self: Self, lua: *Lua) void {
     LuaContext.pushT(lua, self, "Client");
 }
 
-pub fn hash(self: *Self) usize {
+pub fn hash(self: *const Self) usize {
     return @intFromPtr(self.child);
 }

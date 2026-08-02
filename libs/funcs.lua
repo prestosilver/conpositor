@@ -81,7 +81,7 @@ function M.set_monitor_tag(tag)
     return function()
         local monitor = session:active_monitor()
         if monitor then
-            monitor:set_tag(tag)
+            monitor.active_tag = tag
         end
     end
 end
@@ -117,7 +117,7 @@ function M.cycle_layout(direction, lists)
     local lists = lists
     return function()
         local monitor = session:active_monitor()
-        local current_layout = monitor:get_layout()
+        local current_layout = monitor.layout
         if monitor then
             for _, list in pairs(lists) do
                 for i, v in pairs(list) do
@@ -127,7 +127,7 @@ function M.cycle_layout(direction, lists)
                             idx = idx + #list
                         end
 
-                        monitor:set_layout(list[(idx % #list) + 1])
+                        monitor.layout = list[(idx % #list) + 1]
                         return
                     end
                 end

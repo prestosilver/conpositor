@@ -12,8 +12,8 @@ local function update_gaps()
 
     local monitor = session:active_monitor()
     if monitor then
-        monitor:set_inner_gaps(set_gaps_value)
-        monitor:set_outer_gaps(set_gaps_valuei)
+        monitor.inner_gaps = set_gaps_value
+        monitor.outer_gaps = set_gaps_valuei
     end
 end
 
@@ -72,7 +72,7 @@ function M.setup(config)
     M.gaps_outer = config.outer or 0.0
     M.init = true
 
-    session:add_hook("add_monitor", function(monitor)
+    session:hook("add_monitor", function(monitor)
         local set_gaps_value = 0
         local set_gaps_valuei = 0
         if M.gaps_toggle then
@@ -80,8 +80,8 @@ function M.setup(config)
             set_gaps_valuei = set_gaps_value * M.gaps_ratio + M.gaps_outer
         end
 
-        monitor:set_inner_gaps(set_gaps_value)
-        monitor:set_outer_gaps(set_gaps_valuei)
+        monitor.inner_gaps = set_gaps_value
+        monitor.outer_gaps = set_gaps_valuei
     end)
 
     update_gaps()
