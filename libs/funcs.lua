@@ -35,7 +35,7 @@ function M.set_client_border(size)
     return function()
         local client = session:active_client()
         if client then
-            client:set_border(size)
+            client.border = size
         end
     end
 end
@@ -46,7 +46,7 @@ function M.toggle_floating()
     return function()
         local client = session:active_client()
         if client then
-            client:set_floating(not client:get_floating())
+            client.floating = not client.floating
         end
     end
 end
@@ -57,7 +57,7 @@ function M.toggle_fullscreen()
     return function()
         local client = session:active_client()
         if client then
-            client:set_fullscreen(not client:get_fullscreen())
+            client.fullscreen = not client.fullscreen
         end
     end
 end
@@ -94,7 +94,7 @@ function M.set_client_tag(tag)
     return function()
         local client = session:active_client()
         if client then
-            client:set_tag(tag)
+            client.tag = tag
         end
     end
 end
@@ -107,7 +107,7 @@ function M.set_client_stack(stack)
     return function()
         local client = session:active_client()
         if client then
-            client:set_stack(stack)
+            client.stack = stack
         end
     end
 end
