@@ -21,6 +21,10 @@ pub fn getRoot(self: *Self) LuaContainer {
     };
 }
 
+pub fn getName(self: *Self) []const u8 {
+    return self.child.name;
+}
+
 pub fn format(self: Self, writer: *std.Io.Writer) !void {
     try writer.print("{*}", .{self.child});
 }

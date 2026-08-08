@@ -547,6 +547,14 @@ pub const LUA_TYPES = [_]LuaType{
                 .binding_mode = .auto,
                 .kind = .getter,
             },
+            .{
+                .impl_name = "getName",
+                .lua_name = "name",
+                .description = "Gets the name of the layout",
+
+                .binding_mode = .auto,
+                .kind = .getter,
+            },
         },
     },
 };
