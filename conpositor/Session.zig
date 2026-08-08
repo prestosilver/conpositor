@@ -900,6 +900,9 @@ pub fn getObjectsAt(self: *Session, x: f64, y: f64) ObjectData {
     if (result.client) |client|
         result.surface = client.getSurface();
 
+    if (result.layer_surface) |layer_surface|
+        result.surface = layer_surface.surface.surface;
+
     return result;
 }
 

@@ -221,21 +221,28 @@ pub fn arrangeLayers(self: *Monitor) !void {
 
     if (!self.output.enabled) return;
 
-    for (0..4) |i|
-        self.arrangeLayer(3 - i, &usable, true);
+    for (0..TOTAL_LAYERS) |i|
+        self.arrangeLayer(TOTAL_LAYERS - 1 - i, &usable, true);
 
     if (!std.meta.eql(usable, self.window)) {
         self.window = usable;
         self.dirty.layout = true;
     }
+}
 
-    for (0..4) |i|
-        self.arrangeLayer(3 - i, &usable, false);
+pub fn arrangeLayersAbove(self: *Monitor) !void {
+    var usable = self.window;
+
+    for (0..TOTAL_LAYERS) |i|
+        self.arrangeLayer(TOTAL_LAYERS - 1 - i, &usable, false);
 
     for (LAYERS_ABOVE_SHELL) |idx| {
         var iter = self.layers[idx].iterator(.reverse);
         while (iter.next()) |layersurface| {
-            if (!self.session.input.locked and layersurface.surface.current.keyboard_interactive != .none and layersurface.mapped) {
+            if (!self.session.input.locked and
+                layersurface.surface.current.keyboard_interactive == .none and
+                layersurface.mapped)
+            {
                 self.session.focusClear();
                 self.session.exclusive_focus = layersurface.surface.surface;
                 layersurface.notifyEnter(self.session.input.seat, self.session.input.seat.getKeyboard());
@@ -306,13 +313,27 @@ fn frame(self: *Monitor) !void {
     //     _ = self.scene_output.commit(null);
     //     self.last_frame = tmp_now;
     // }
+    commit: {
+        var iter = self.session.clients.iterator(.forward);
+        while (iter.next()) |client| {
+            if (client.dirty.size == true and
+                client.surface == .XDG and
+                client.monitor == self and
+                client.visible and
+                !client.isStopped())
+                break :commit;
+        }
 
-    _ = self.scene_output.commit(null);
+        _ = self.scene_output.commit(null);
+    }
 
     var now: std.posix.timespec = undefined;
     if (std.c.clock_gettime(std.posix.CLOCK.MONOTONIC, &now) > 0)
         @panic("CLOCK_MONOTONIC not supported");
     self.scene_output.sendFrameDone(&now);
+
+    var pending: wlr.Output.State = std.mem.zeroInit(wlr.Output.State, .{});
+    pending.finish();
 }
 
 fn present(self: *Monitor) !void {
@@ -337,6 +358,8 @@ fn present(self: *Monitor) !void {
 fn updateTabs(self: *Monitor) !void {
     defer self.dirty.tabs = false;
 
+    std.log.debug("Update monitor tabs {*}", .{self});
+
     var iter = self.session.focus_clients.iterator(.forward);
     while (iter.next()) |client| {
         const visible = self.isClientVisible(client);
@@ -349,6 +372,8 @@ fn updateTabs(self: *Monitor) !void {
 fn updateLayout(self: *Monitor) !void {
     defer self.dirty.layout = false;
     defer self.dirty.force_layout = false;
+
+    std.log.debug("Update monitor layout {*}", .{self});
 
     // TODO: dynamic/packed allocation?
     var usage: [256]bool = .{false} ** 256;
@@ -412,6 +437,7 @@ fn updateLayout(self: *Monitor) !void {
     // TODO: update fullscreen state
 
     try self.session.input.motionNotify(0);
+    try self.arrangeLayersAbove();
 }
 
 fn arrangeLayer(self: *Monitor, idx: usize, usable: *wlr.Box, exclusive: bool) void {
