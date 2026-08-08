@@ -4,16 +4,27 @@
         This protocol is used to run lua code in conpositor.
     </description>
 
-    <interface name="conpositor_lua_runner_v1" version="1">
-        <description summary="Run lua code">
+    <interface name="conpositor_lua_manager_v1" version="1">
+        <description summary="Create lua instances">
             This interface is used to run lua code in conpositor.
         </description>
         
-        <request name="run_lua_code">
+        <request name="create_runner">
+            <description summary="Spawn a new lua instance"/>
+            <arg name="id" type="new_id" interface="conpositor_lua_runner_v1"/>
+        </request>
+    </interface>
+        
+    <interface name="conpositor_lua_runner_v1" version="1">
+        <description summary="Run lua code">
+            This interface is used to broadcast lua messages
+        </description>
+
+        <request name="begin">
             <description summary="Runs lua code"/>
             <arg name="command" type="string" summary="The code to run"/>
         </request>
-        
+
         <event name="print">
             <description summary="Announces a print">
                 Signals that the lua command has printed something.

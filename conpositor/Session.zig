@@ -11,7 +11,7 @@ const Monitor = @import("Monitor.zig");
 const Client = @import("Client.zig");
 const Input = @import("Input.zig");
 const LayerSurface = @import("LayerSurface.zig");
-const IpcOutput = @import("Ipc.zig");
+const IpcManager = @import("IpcManager.zig");
 
 const Session = @This();
 
@@ -620,7 +620,7 @@ pub fn attachEvents(self: *Session) Error!void {
 
     try self.config.init();
 
-    _ = try wl.Global.create(self.server, conpositor.IpcManagerV1, 1, *Session, self, IpcOutput.managerBind);
+    _ = try wl.Global.create(self.server, conpositor.LuaManagerV1, 1, *Session, self, IpcManager.managerBind);
 
     self.output_layout.events.change.add(&self.events.layout_change_event);
 

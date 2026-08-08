@@ -16,8 +16,8 @@ pub fn build(b: *std.Build) void {
     scanner.addSystemProtocol("unstable/pointer-gestures/pointer-gestures-unstable-v1.xml");
     scanner.addSystemProtocol("unstable/xdg-decoration/xdg-decoration-unstable-v1.xml");
 
-    scanner.addCustomProtocol(b.path("protocol/conpositor-ipc-unstable-v1.xml"));
-    scanner.addCustomProtocol(b.path("protocol/wlr-layer-shell-unstable-v1.xml"));
+    scanner.addCustomProtocol(b.path("protocol/conpositor-lua-unstable-v1.xml"));
+    scanner.addCustomProtocol(b.path("protocol/upstream/wlr-layer-shell-unstable-v1.xml"));
 
     // Some of these versions may be out of date with what wlroots implements.
     scanner.generate("wl_compositor", 4);
@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) void {
     scanner.generate("wp_tearing_control_manager_v1", 1);
 
     scanner.generate("zwlr_layer_shell_v1", 4);
-    scanner.generate("conpositor_ipc_manager_v1", 1);
+    scanner.generate("conpositor_lua_manager_v1", 1);
 
     const wayland_mod = b.createModule(.{
         .root_source_file = scanner.result,

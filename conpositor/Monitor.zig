@@ -3,7 +3,7 @@ const wlr = @import("wlroots");
 const std = @import("std");
 const conpositor = @import("wayland").server.conpositor;
 
-const ipc = @import("Ipc.zig");
+const IpcManager = @import("IpcManager.zig");
 const LayerSurface = @import("LayerSurface.zig");
 const Config = @import("Config.zig");
 const Session = @import("Session.zig");
@@ -27,7 +27,6 @@ layers: [TOTAL_LAYERS]wl.list.Head(LayerSurface, .link) = undefined,
 tag: u8 = 0,
 layout: ?*Layout = null,
 link: wl.list.Link = undefined,
-ipc_status: wl.list.Head(conpositor.IpcOutputV1, null) = undefined,
 gaps_inner: i32 = 0,
 gaps_outer: i32 = 0,
 
@@ -136,8 +135,6 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
     for (&result.layers) |*layer|
         layer.init();
 
-    result.ipc_status.init();
-
     output.events.frame.add(&result.events.frame_event);
     output.events.present.add(&result.events.present_event);
     output.events.destroy.add(&result.events.deinit_event);
@@ -213,27 +210,10 @@ pub fn setActiveTag(self: *Monitor, tag: u8) void {
     if (self.tag == tag)
         return;
 
-    const old = self.tag;
-
     self.tag = tag;
     self.dirty.layout = true;
     self.dirty.tabs = true;
     self.dirty.focus = true;
-
-    var iter = self.ipc_status.iterator(.forward);
-    while (iter.next()) |resource| {
-        inline for (.{ old, self.tag }) |id| {
-            resource.sendTag(
-                @intCast(id),
-                self.session.config.lua.session.tags.items[id],
-                if (self.tag == id) .active else .none,
-                0,
-                0,
-            );
-        }
-
-        resource.sendFrame();
-    }
 }
 
 pub fn arrangeLayers(self: *Monitor) !void {
@@ -265,62 +245,6 @@ pub fn arrangeLayers(self: *Monitor) !void {
     }
 }
 
-pub fn addIpc(self: *Monitor, resource: *conpositor.IpcOutputV1) void {
-    const tags = self.session.config.getTags();
-
-    // TODO: send containers
-    // const containers = self.session.config.getContainers();
-
-    resource.sendTags(@intCast(tags.len));
-
-    for (tags, 0..) |tag, id| {
-        resource.sendTag(
-            @intCast(id),
-            tag,
-            if (self.tag == id) .active else .none,
-            0,
-            0,
-        );
-    }
-    resource.sendLayout(
-        0,
-        if (self.layout) |layout| layout.name else "",
-    );
-
-    if (self.getFocusedClient()) |focus| {
-        resource.sendFocus(
-            @ptrCast(focus.getLabel().ptr),
-            focus.icon orelse "",
-            @ptrCast(focus.getTitle().ptr),
-            @ptrCast(focus.getAppId().ptr),
-        );
-    } else {
-        resource.sendClearFocus();
-    }
-
-    resource.sendFrame();
-
-    self.ipc_status.append(resource);
-}
-
-pub fn sendFocus(self: *Monitor) void {
-    var iter = self.ipc_status.iterator(.forward);
-    while (iter.next()) |resource| {
-        if (self.getFocusedClient()) |focus| {
-            resource.sendFocus(
-                @ptrCast(focus.getLabel().ptr),
-                focus.icon orelse "",
-                @ptrCast(focus.getTitle().ptr),
-                @ptrCast(focus.getAppId().ptr),
-            );
-        } else {
-            resource.sendClearFocus();
-        }
-
-        resource.sendFrame();
-    }
-}
-
 pub fn setGaps(self: *Monitor, pos: enum { inner, outer }, gaps: i32) void {
     const ptr = switch (pos) {
         .inner => &self.gaps_inner,
@@ -343,15 +267,6 @@ pub fn setLayout(self: *Monitor, layout: ?*Layout) void {
 
     self.layout = layout;
     self.dirty.force_layout = true;
-
-    var iter = self.ipc_status.iterator(.forward);
-    while (iter.next()) |resource| {
-        resource.sendLayout(
-            0,
-            if (self.layout) |l| l.name else "",
-        );
-        resource.sendFrame();
-    }
 }
 
 fn deinit(self: *Monitor) void {
