@@ -24,10 +24,11 @@ pub const Error = error{
 
 pub const RunResult = struct {
     failed: bool,
-    result: [:0]const u8,
+    result: ?[:0]const u8,
 
     pub fn deinit(self: *RunResult) void {
-        allocator.free(self.result);
+        if (self.result) |result|
+            allocator.free(result);
     }
 };
 
@@ -575,7 +576,7 @@ pub fn run(self: *Self, command: []const u8) Error!RunResult {
     defer allocator.free(cmd);
 
     self.lua.doString(cmd) catch |err| {
-        const result = self.lua.toString(-1) catch "unknown lua error";
+        const result = try allocator.dupeZ(u8, self.lua.toString(-1) catch "unknown lua error");
 
         std.log.err("{s}: {s}", .{ @errorName(err), result });
 
@@ -587,14 +588,20 @@ pub fn run(self: *Self, command: []const u8) Error!RunResult {
             std.log.info("{?s}", .{di.name});
         }
 
+        self.lua.setTop(0);
+
         return .{
             .failed = true,
             .result = result,
         };
     };
 
-    const result = try allocator.dupeZ(u8, self.lua.toString(-1) catch "");
-    self.lua.pop(1);
+    var result: ?[:0]const u8 = null;
+
+    if (self.lua.getTop() > 0) {
+        result = try allocator.dupeZ(u8, self.lua.toString(-1) catch "");
+        self.lua.setTop(0);
+    }
 
     return .{
         .failed = false,

@@ -1192,9 +1192,6 @@ fn activate(self: *Client) !void {
     if (self.surface != .X11)
         return;
 
-    if (self.monitor) |monitor|
-        monitor.sendFocus();
-
     self.surface.X11.activate(true);
 }
 
