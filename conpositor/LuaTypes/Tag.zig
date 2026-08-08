@@ -2,6 +2,7 @@ const std = @import("std");
 const zlua = @import("zlua");
 
 const Config = @import("../Config.zig");
+const LuaContext = @import("../LuaContext.zig");
 
 const Lua = zlua.Lua;
 
@@ -14,13 +15,17 @@ pub fn format(self: Self, writer: *std.Io.Writer) !void {
 }
 
 pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !Self {
-    const result = try lua.toUserdata(Self, index);
+    _ = lua.getField(index, "instance");
+    const result = try lua.toUserdata(Self, -1);
+    lua.pop(1);
+
     return result.*;
 }
 
 pub fn toLua(self: Self, lua: *Lua) void {
-    const tmp = lua.newUserdata(Self, 0);
-    tmp.* = self;
+    LuaContext.pushT(lua, self, "Tag");
+}
 
-    lua.setMetatableRegistry("Tag");
+pub fn hash(self: *const Self) usize {
+    return @intCast(self.id);
 }

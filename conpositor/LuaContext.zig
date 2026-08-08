@@ -312,6 +312,30 @@ pub const LUA_TYPES = [_]LuaType{
         },
     },
     .{
+        .impl = @import("LuaTypes/Tag.zig"),
+        .lua_name = "Tag",
+        .description =
+        \\ A tag object
+        ,
+        .methods = &.{},
+    },
+    .{
+        .impl = @import("LuaTypes/Tag.zig"),
+        .lua_name = "Tag",
+        .description =
+        \\ A tag object
+        ,
+        .methods = &.{},
+    },
+    .{
+        .impl = @import("LuaTypes/Tag.zig"),
+        .lua_name = "Tag",
+        .description =
+        \\ A tag object
+        ,
+        .methods = &.{},
+    },
+    .{
         .impl = @import("LuaTypes/Monitor.zig"),
         .lua_name = "Monitor",
         .description =
