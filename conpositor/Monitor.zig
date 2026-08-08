@@ -3,7 +3,7 @@ const wlr = @import("wlroots");
 const std = @import("std");
 const conpositor = @import("wayland").server.conpositor;
 
-const ipc = @import("Ipc.zig");
+const IpcManager = @import("IpcManager.zig");
 const LayerSurface = @import("LayerSurface.zig");
 const Config = @import("Config.zig");
 const Session = @import("Session.zig");
@@ -27,7 +27,6 @@ layers: [TOTAL_LAYERS]wl.list.Head(LayerSurface, .link) = undefined,
 tag: u8 = 0,
 layout: ?*Layout = null,
 link: wl.list.Link = undefined,
-ipc_status: wl.list.Head(conpositor.IpcOutputV1, null) = undefined,
 gaps_inner: i32 = 0,
 gaps_outer: i32 = 0,
 
@@ -136,8 +135,6 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
     for (&result.layers) |*layer|
         layer.init();
 
-    result.ipc_status.init();
-
     output.events.frame.add(&result.events.frame_event);
     output.events.present.add(&result.events.present_event);
     output.events.destroy.add(&result.events.deinit_event);
@@ -213,27 +210,10 @@ pub fn setActiveTag(self: *Monitor, tag: u8) void {
     if (self.tag == tag)
         return;
 
-    const old = self.tag;
-
     self.tag = tag;
     self.dirty.layout = true;
     self.dirty.tabs = true;
     self.dirty.focus = true;
-
-    var iter = self.ipc_status.iterator(.forward);
-    while (iter.next()) |resource| {
-        inline for (.{ old, self.tag }) |id| {
-            resource.sendTag(
-                @intCast(id),
-                self.session.config.lua.session.tags.items[id],
-                if (self.tag == id) .active else .none,
-                0,
-                0,
-            );
-        }
-
-        resource.sendFrame();
-    }
 }
 
 pub fn arrangeLayers(self: *Monitor) !void {
@@ -241,83 +221,34 @@ pub fn arrangeLayers(self: *Monitor) !void {
 
     if (!self.output.enabled) return;
 
-    for (0..4) |i|
-        self.arrangeLayer(3 - i, &usable, true);
+    for (0..TOTAL_LAYERS) |i|
+        self.arrangeLayer(TOTAL_LAYERS - 1 - i, &usable, true);
 
     if (!std.meta.eql(usable, self.window)) {
         self.window = usable;
         self.dirty.layout = true;
     }
+}
 
-    for (0..4) |i|
-        self.arrangeLayer(3 - i, &usable, false);
+pub fn arrangeLayersAbove(self: *Monitor) !void {
+    var usable = self.window;
+
+    for (0..TOTAL_LAYERS) |i|
+        self.arrangeLayer(TOTAL_LAYERS - 1 - i, &usable, false);
 
     for (LAYERS_ABOVE_SHELL) |idx| {
         var iter = self.layers[idx].iterator(.reverse);
         while (iter.next()) |layersurface| {
-            if (!self.session.input.locked and layersurface.surface.current.keyboard_interactive != .none and layersurface.mapped) {
+            if (!self.session.input.locked and
+                layersurface.surface.current.keyboard_interactive == .none and
+                layersurface.mapped)
+            {
                 self.session.focusClear();
                 self.session.exclusive_focus = layersurface.surface.surface;
                 layersurface.notifyEnter(self.session.input.seat, self.session.input.seat.getKeyboard());
                 return;
             }
         }
-    }
-}
-
-pub fn addIpc(self: *Monitor, resource: *conpositor.IpcOutputV1) void {
-    const tags = self.session.config.getTags();
-
-    // TODO: send containers
-    // const containers = self.session.config.getContainers();
-
-    resource.sendTags(@intCast(tags.len));
-
-    for (tags, 0..) |tag, id| {
-        resource.sendTag(
-            @intCast(id),
-            tag,
-            if (self.tag == id) .active else .none,
-            0,
-            0,
-        );
-    }
-    resource.sendLayout(
-        0,
-        if (self.layout) |layout| layout.name else "",
-    );
-
-    if (self.getFocusedClient()) |focus| {
-        resource.sendFocus(
-            @ptrCast(focus.getLabel().ptr),
-            focus.icon orelse "",
-            @ptrCast(focus.getTitle().ptr),
-            @ptrCast(focus.getAppId().ptr),
-        );
-    } else {
-        resource.sendClearFocus();
-    }
-
-    resource.sendFrame();
-
-    self.ipc_status.append(resource);
-}
-
-pub fn sendFocus(self: *Monitor) void {
-    var iter = self.ipc_status.iterator(.forward);
-    while (iter.next()) |resource| {
-        if (self.getFocusedClient()) |focus| {
-            resource.sendFocus(
-                @ptrCast(focus.getLabel().ptr),
-                focus.icon orelse "",
-                @ptrCast(focus.getTitle().ptr),
-                @ptrCast(focus.getAppId().ptr),
-            );
-        } else {
-            resource.sendClearFocus();
-        }
-
-        resource.sendFrame();
     }
 }
 
@@ -343,15 +274,6 @@ pub fn setLayout(self: *Monitor, layout: ?*Layout) void {
 
     self.layout = layout;
     self.dirty.force_layout = true;
-
-    var iter = self.ipc_status.iterator(.forward);
-    while (iter.next()) |resource| {
-        resource.sendLayout(
-            0,
-            if (self.layout) |l| l.name else "",
-        );
-        resource.sendFrame();
-    }
 }
 
 fn deinit(self: *Monitor) void {
@@ -391,13 +313,27 @@ fn frame(self: *Monitor) !void {
     //     _ = self.scene_output.commit(null);
     //     self.last_frame = tmp_now;
     // }
+    commit: {
+        var iter = self.session.clients.iterator(.forward);
+        while (iter.next()) |client| {
+            if (client.dirty.size == true and
+                client.surface == .XDG and
+                client.monitor == self and
+                client.visible and
+                !client.isStopped())
+                break :commit;
+        }
 
-    _ = self.scene_output.commit(null);
+        _ = self.scene_output.commit(null);
+    }
 
     var now: std.posix.timespec = undefined;
     if (std.c.clock_gettime(std.posix.CLOCK.MONOTONIC, &now) > 0)
         @panic("CLOCK_MONOTONIC not supported");
     self.scene_output.sendFrameDone(&now);
+
+    var pending: wlr.Output.State = std.mem.zeroInit(wlr.Output.State, .{});
+    pending.finish();
 }
 
 fn present(self: *Monitor) !void {
@@ -422,6 +358,8 @@ fn present(self: *Monitor) !void {
 fn updateTabs(self: *Monitor) !void {
     defer self.dirty.tabs = false;
 
+    std.log.debug("Update monitor tabs {*}", .{self});
+
     var iter = self.session.focus_clients.iterator(.forward);
     while (iter.next()) |client| {
         const visible = self.isClientVisible(client);
@@ -434,6 +372,8 @@ fn updateTabs(self: *Monitor) !void {
 fn updateLayout(self: *Monitor) !void {
     defer self.dirty.layout = false;
     defer self.dirty.force_layout = false;
+
+    std.log.debug("Update monitor layout {*}", .{self});
 
     // TODO: dynamic/packed allocation?
     var usage: [256]bool = .{false} ** 256;
@@ -497,6 +437,7 @@ fn updateLayout(self: *Monitor) !void {
     // TODO: update fullscreen state
 
     try self.session.input.motionNotify(0);
+    try self.arrangeLayersAbove();
 }
 
 fn arrangeLayer(self: *Monitor, idx: usize, usable: *wlr.Box, exclusive: bool) void {
