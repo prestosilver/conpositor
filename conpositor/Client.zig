@@ -230,8 +230,6 @@ hide_frame: bool = false,
 active: bool = false,
 container_title: bool = false,
 
-resize_serial: ?u32 = null,
-
 link: wl.list.Link = undefined,
 focus_link: wl.list.Link = undefined,
 
@@ -660,8 +658,6 @@ fn updateSize(self: *Client) !void {
     std.log.debug("Update size of client {*}", .{self});
     defer self.dirty.size = false;
 
-    self.resize_serial = self.updateSizeSerial();
-
     if (self.isStopped())
         return;
 
@@ -720,6 +716,8 @@ fn updateSize(self: *Client) !void {
 
         try self.updateTitles();
     }
+
+    _ = self.updateSizeSerial();
 }
 
 fn updateFrame(self: *Client) !void {
@@ -748,6 +746,8 @@ fn updateTabs(self: *Client) !void {
 
     if (self.getFrameKind() != .title)
         return;
+
+    std.log.debug("Update client tabs {*}", .{self});
 
     const bounds = self.getBounds();
 
@@ -1116,7 +1116,7 @@ fn applyBounds(self: *Client, bounds: wlr.Box, base: bool) wlr.Box {
     return result;
 }
 
-fn updateSizeSerial(self: *Client) ?u32 {
+fn updateSizeSerial(self: *Client) u32 {
     const bounds = self.getBounds();
     const inner_bounds = self.getInnerBounds();
 
@@ -1135,22 +1135,19 @@ fn updateSizeSerial(self: *Client) ?u32 {
             @intCast(inner.height),
         );
 
-        return null;
+        return 0;
     }
 
-    if (self.surface.XDG.role_data.toplevel == null) return null;
+    if (self.surface.XDG.role_data.toplevel == null) return 0;
 
     if (inner.width == self.surface.XDG.role_data.toplevel.?.current.width and
         inner.height == self.surface.XDG.role_data.toplevel.?.current.height)
-        return null;
+        return 0;
 
     return self.surface.XDG.role_data.toplevel.?.setSize(inner.width, inner.height);
 }
 
 fn commit(self: *Client) !void {
-    if (self.resize_serial != null and self.resize_serial.? <= self.surface.XDG.current.configure_serial)
-        self.resize_serial = null;
-
     if (self.surface.XDG.role_data.toplevel) |toplevel|
         _ = toplevel.configure(&.{
             .fields = .{

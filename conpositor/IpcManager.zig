@@ -36,6 +36,13 @@ fn handleRunnerRequest(
     }
 }
 
+fn destroyRunner(
+    _: *conpositor.LuaRunnerV1,
+    handler: *RunnerHandler,
+) void {
+    allocator.destroy(handler);
+}
+
 fn createRunner(
     manager: *conpositor.LuaManagerV1,
     request: conpositor.LuaManagerV1.Request,
@@ -56,7 +63,7 @@ fn createRunner(
         .session = session,
     };
 
-    resource.setHandler(*RunnerHandler, handleOutputRequest, null, runner);
+    resource.setHandler(*RunnerHandler, handleOutputRequest, destroyRunner, runner);
 }
 
 fn handleOutputRequest(

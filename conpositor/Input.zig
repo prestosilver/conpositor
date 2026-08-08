@@ -495,7 +495,7 @@ pub fn motionNotify(
         self.cursor.setXcursor(self.xcursor_manager, self.xcursor_image.?);
     }
 
-    try self.pointerFocus(objects.client, objects.surface, time);
+    try self.pointerFocus(objects, time);
 }
 
 pub fn endDrag(self: *Input) !bool {
@@ -541,19 +541,19 @@ fn cursorMotionAbsolute(self: *Input, motion: *wlr.Pointer.event.MotionAbsolute)
     try self.motionNotify(@intCast(motion.time_msec));
 }
 
-fn pointerFocus(self: *Input, target_client: ?*Client, surface: ?*wlr.Surface, time: usize) !void {
+fn pointerFocus(self: *Input, objects: Session.ObjectData, time: usize) !void {
     const internal_call = time == 0;
     var atime: usize = time;
 
     if (!internal_call and
-        target_client != null and
-        !(target_client.?.surface == .X11 and !target_client.?.managed))
-        try self.session.focusClient(target_client.?, false);
+        objects.client != null and
+        !(objects.client.?.surface == .X11 and !objects.client.?.managed))
+        try self.session.focusClient(objects.client.?, false);
 
-    if (surface == null) {
+    const surface = objects.surface orelse {
         self.seat.pointerNotifyClearFocus();
         return;
-    }
+    };
 
     if (internal_call) {
         var now: std.posix.timespec = undefined;
@@ -564,7 +564,7 @@ fn pointerFocus(self: *Input, target_client: ?*Client, surface: ?*wlr.Surface, t
         atime = @bitCast(now.sec * 1000 + @divTrunc(now.nsec, 1000000));
     }
 
-    if (target_client) |client| {
+    if (objects.client) |client| {
         const bounds = client.getBounds();
         const inner_bounds = client.getInnerBounds();
 
@@ -575,7 +575,21 @@ fn pointerFocus(self: *Input, target_client: ?*Client, surface: ?*wlr.Surface, t
             @as(f64, @floatFromInt(inner_bounds.y)) -
             @as(f64, @floatFromInt(bounds.y));
 
-        self.seat.pointerNotifyEnter(surface.?, x, y);
+        self.seat.pointerNotifyEnter(surface, x, y);
+        self.seat.pointerNotifyMotion(@intCast(atime), x, y);
+    }
+
+    if (objects.layer_surface) |layer_surface| {
+        std.log.warn("Click layer surf", .{});
+
+        const bounds = layer_surface.bounds;
+
+        const x = self.cursor.x -
+            @as(f64, @floatFromInt(bounds.x));
+        const y = self.cursor.y -
+            @as(f64, @floatFromInt(bounds.y));
+
+        self.seat.pointerNotifyEnter(surface, x, y);
         self.seat.pointerNotifyMotion(@intCast(atime), x, y);
     }
 }
