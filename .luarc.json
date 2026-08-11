@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/sumneko/vscode-lua/master/setting/schema.json",
+  "runtime.path": [
+    "/usr/share/conpositor/?",
+    "/usr/share/conpositor/?.lua",
+    "~/.conpositor/?",
+    "~/.conpositor/?.lua",
+    "~/.config/conpositor/?",
+    "~/.config/conpositor/?.lua",
+    "/usr/lib/?",
+    "/usr/lib/?.lua"
+  ],
+  "diagnostics.globals": [
+    "session",
+    "TextModule"
+  ]
+}

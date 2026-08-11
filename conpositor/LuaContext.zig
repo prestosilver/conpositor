@@ -123,7 +123,7 @@ pub const LuaType = struct {
         }
 
         const MetaMethods = struct {
-            fn eq(a: *self.impl, b: *self.impl) bool {
+            fn eq(a: self.impl, b: self.impl) bool {
                 return a.hash() == b.hash();
             }
 
@@ -143,8 +143,11 @@ pub const LuaType = struct {
                 return 1;
             }
         };
-        lua.autoPushFunction(MetaMethods.eq);
-        lua.setField(-2, "__eq");
+
+        if (@hasDecl(self.impl, "fromLua")) {
+            lua.autoPushFunction(MetaMethods.eq);
+            lua.setField(-2, "__eq");
+        }
         lua.pushFunction(zlua.wrap(MetaMethods.toString));
         lua.setField(-2, "__tostring");
 
@@ -417,6 +420,13 @@ pub const LUA_TYPES = [_]LuaType{
                 .kind = .getter,
             },
             .{
+                .impl_name = "getTag",
+                .lua_name = "_get_tag",
+                .description = "Returns the tag at index",
+
+                .binding_mode = .auto,
+            },
+            .{
                 .impl_name = "quit",
                 .lua_name = "quit",
                 .description = "Quit the current session",
@@ -462,13 +472,6 @@ pub const LUA_TYPES = [_]LuaType{
                 .impl_name = "newLayout",
                 .lua_name = "new_layout",
                 .description = "Creates a new layout",
-
-                .binding_mode = .auto,
-            },
-            .{
-                .impl_name = "newTag",
-                .lua_name = "new_tag",
-                .description = "Creates a new tag",
 
                 .binding_mode = .auto,
             },
@@ -720,13 +723,16 @@ pub fn init(self: *Self, path: []const u8) Error!void {
     self.lua.pushLightUserdata(&self.session);
     self.lua.setField(-2, "instance");
 
-    self.lua.pushNil();
+    self.lua.newTable();
     self.lua.setField(-2, "fields");
 
     _ = self.lua.getGlobal("Session");
     self.lua.setMetatable(-2);
 
     self.lua.setGlobal("session");
+
+    // mixins
+    self.lua.doString(@embedFile("lua/session_mixin.lua")) catch unreachable;
 
     self.is_init = true;
 

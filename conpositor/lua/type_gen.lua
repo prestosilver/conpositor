@@ -1,7 +1,7 @@
 _GenerateType = function(functions, methods, getters, setters)
     local instances = {}
 
-    result = {
+    local result = {
         _destroy = function(self)
             local hash = self:_hash()
             instances[hash] = nil
@@ -28,8 +28,7 @@ _GenerateType = function(functions, methods, getters, setters)
 
         __newindex = (function(self, index, value)
             if methods[index] then
-                print "Cant set a method"
-                return
+                error "Cant set a method"
             end
 
             if setters[index] then
@@ -38,8 +37,7 @@ _GenerateType = function(functions, methods, getters, setters)
             end
 
             if getters[index] then
-                print "Cant set a ro value"
-                return
+                error "Cant set a ro value"
             end
 
             local hash = self:_hash()

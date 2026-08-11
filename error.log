@@ -1,0 +1,33 @@
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/albumcolors.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/bunker.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/gruvbox.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/catpuccin.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/neutral.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/onealbumcolor.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/monochrome.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/pewter.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/ravachol.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/default.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/cyberpunk.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/tokyonight.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/kew-theme-pack3.txt
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/forest.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/gruvboxlight.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/solarizedlight.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/army.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/midnight.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/purple.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/THEMES-HOWTO.md
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/kew-theme-pack2.txt
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/nord.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/marianatrench.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/synthwave.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/paper.theme
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/kew-theme-pack1.txt
+ensure_default_themes: destination is newer or same: /home/john/.config/kew/themes/kanagawa.theme
+
+(process:18239): GLib-GIO-CRITICAL **: 07:29:36.479: g_dbus_connection_emit_signal: assertion 'G_IS_DBUS_CONNECTION (connection)' failed
+Failed to load image: 
+Failed to load image: 
+Failed to load image: 
+Failed to load image: 
