@@ -1,7 +1,7 @@
 --- @module 'types.all'
-local gaps = require("lib.gaps")
-local funcs = require("lib.funcs")
-local mouse = require("lib.mouse")
+local gaps = require("lib.gaps") --- @class gaps
+local funcs = require("lib.funcs") --- @class funcs
+local mouse = require("lib.mouse") --- @class mouse
 
 -- load colorscheme and libraries
 require("mondo.colors")

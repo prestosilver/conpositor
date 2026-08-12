@@ -1,4 +1,4 @@
--- require some builtin libraries
+--- @module 'types.all'
 local gaps = require("lib.gaps")
 local funcs = require("lib.funcs")
 local mouse = require("lib.mouse")

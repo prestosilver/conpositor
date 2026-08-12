@@ -1,3 +1,4 @@
+--- @class funcs
 local M = {}
 
 local function pt(pixels)
@@ -138,9 +139,9 @@ function M.cycle_layout(direction, lists)
     end
 end
 
---- Creates a callback that cycles the focus in the active stack
---- @param stack number The direction to cycle -1 is backwards 1 is forwards
---- @return fun() # Returns a function callback
+---Creates a callback that cycles the focus in the active stack
+---@param direction number The direction to cycle -1 is backwards 1 is forwards
+---@return fun() # Returns a function callback
 function M.cycle_focus(direction)
     -- TODO: make direction a string
     local direction = direction
@@ -149,10 +150,9 @@ function M.cycle_focus(direction)
     end
 end
 
---- Creates a callback that spawns a command
---- @param program string The program to call
---- @param args Any arguments to pass
---- @return fun() # Returns a function callback
+---Creates a callback that spawns a command
+---@param ... string The program to call
+---@return fun() func The new spawn function
 function M.spawn(...)
     local count = select('#', ...)
 

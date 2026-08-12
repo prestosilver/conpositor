@@ -160,7 +160,7 @@ pub const LUA_TYPES = [_]LuaType{
         .impl = @import("LuaTypes/TextModule.zig"),
         .lua_name = "TextModule",
         .description =
-        \\ A text module for client bars
+        \\A text module for client bars
         ,
         .gc = .{
             .impl_name = "luaGC",
@@ -183,7 +183,7 @@ pub const LUA_TYPES = [_]LuaType{
         .impl = @import("LuaTypes/Client.zig"),
         .lua_name = "Client",
         .description =
-        \\ A client object
+        \\A client object
         ,
         .methods = &.{
             .{
@@ -319,23 +319,7 @@ pub const LUA_TYPES = [_]LuaType{
         .impl = @import("LuaTypes/Tag.zig"),
         .lua_name = "Tag",
         .description =
-        \\ A tag object
-        ,
-        .methods = &.{},
-    },
-    .{
-        .impl = @import("LuaTypes/Tag.zig"),
-        .lua_name = "Tag",
-        .description =
-        \\ A tag object
-        ,
-        .methods = &.{},
-    },
-    .{
-        .impl = @import("LuaTypes/Tag.zig"),
-        .lua_name = "Tag",
-        .description =
-        \\ A tag object
+        \\A tag object
         ,
         .methods = &.{},
     },
@@ -343,7 +327,7 @@ pub const LUA_TYPES = [_]LuaType{
         .impl = @import("LuaTypes/Monitor.zig"),
         .lua_name = "Monitor",
         .description =
-        \\ A monitor object
+        \\A monitor object
         ,
         .methods = &.{
             .{
@@ -408,7 +392,7 @@ pub const LUA_TYPES = [_]LuaType{
         .impl = @import("LuaTypes/Session.zig"),
         .lua_name = "Session",
         .description =
-        \\ The session object
+        \\The session object
         ,
         .methods = &.{
             .{
@@ -443,7 +427,10 @@ pub const LUA_TYPES = [_]LuaType{
             .{
                 .impl_name = "getActiveMonitor",
                 .lua_name = "active_monitor",
-                .description = "Returns the current active monitor",
+                .description =
+                \\@return Monitor 
+                \\Returns the current active monitor
+                ,
 
                 .binding_mode = .auto,
             },
@@ -516,7 +503,7 @@ pub const LUA_TYPES = [_]LuaType{
         .impl = @import("LuaTypes/Container.zig"),
         .lua_name = "Container",
         .description =
-        \\ A container object
+        \\A container object
         ,
         .methods = &.{
             .{
@@ -540,7 +527,7 @@ pub const LUA_TYPES = [_]LuaType{
         .impl = @import("LuaTypes/Layout.zig"),
         .lua_name = "Layout",
         .description =
-        \\ A layout object
+        \\A layout object
         ,
         .methods = &.{
             .{

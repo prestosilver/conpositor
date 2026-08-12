@@ -1,12 +1,22 @@
+---@class mouse
+---@field current_bind mouse.Bind
 local M = {}
+
+---@class mouse.Bind
+---@field start ?fun(client: Client, position: any)
+---@field move ?fun(position: any)
+---@field release ?fun()
 
 function M.addBind(name, bind)
     M.binds[name] = bind
 end
 
-function M.bind(name)
+---Creates a new mouse bind for the specified action
+function M.bind(action_name)
+    local action_name = action_name
+
     return function(client, position)
-        M.current_bind = M.binds[name]
+        M.current_bind = M.binds[action_name]
 
         if M.current_bind.start then
             M.current_bind.start(client, position)

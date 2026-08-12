@@ -1,3 +1,4 @@
+---@module 'types.all'
 local gaps = require("lib.gaps")   -- A gap utility library
 local funcs = require("lib.funcs") -- Helper functions for bindings
 local mouse = require("lib.mouse") -- Some usual mouse binds so you dont have to implement them
@@ -86,6 +87,7 @@ session:hook("add_monitor", function(monitor)
 end)
 
 -- Setup mouse config
+--- @class Client
 local mouse_client = nil
 local mouse_client_position = {}
 local mouse_floating = false
