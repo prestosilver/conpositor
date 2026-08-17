@@ -1,5 +1,7 @@
 // The monitor object is primarily an abstraction over wayland outputs,
 // it also maintains storing what portion of layouts is dirty.
+//
+// NOTES:
 const conpositor = @import("wayland").server.conpositor;
 const wl = @import("wayland").server.wl;
 const wlr = @import("wlroots");

@@ -1,3 +1,7 @@
+// The entry point for conpositor
+//
+// NOTES:
+// This should not define any types
 const std = @import("std");
 const builtin = @import("builtin");
 
