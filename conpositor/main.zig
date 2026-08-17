@@ -14,6 +14,7 @@ const ConpositorError =
     Session.Error ||
     Config.Error;
 
+// This main function should only construct the high level storage types
 pub fn main(init: std.process.Init) ConpositorError!void {
     defer Config.allocator_data.deinit();
 
