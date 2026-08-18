@@ -1,3 +1,7 @@
+// Client stores instances of windows, it abstracts away X11 and XDG clients into one type.
+// it also maintains what part of the windows layout is dirty, frame size, position etc.
+//
+// NOTES:
 const wl = @import("wayland").server.wl;
 const wlr = @import("wlroots");
 const std = @import("std");
@@ -18,6 +22,7 @@ const allocator = Config.allocator;
 const SurfaceKind = enum { XDG, X11 };
 const FrameKind = enum { hide, border, title };
 
+// The frame of a client
 const ClientFrame = struct {
     is_init: bool = false,
 
@@ -67,6 +72,7 @@ const ClientFrame = struct {
     }
 };
 
+// The surface of the client
 pub const ClientSurface = union(SurfaceKind) {
     XDG: *wlr.XdgSurface,
     X11: *wlr.XwaylandSurface,
@@ -207,31 +213,51 @@ const Events = struct {
     }
 };
 
+// TODO: Switch to an enum
 client_id: u8 = 10,
 
+// A ref to the parent session, useful for quick access
 session: *Session,
+
+// The next client
+link: wl.list.Link = undefined,
+
+// The next client to focus
+focus_link: wl.list.Link = undefined,
+
 surface: ClientSurface,
 events: Events = .{},
 
+// The associated scene
 scene: *wlr.SceneTree = undefined,
 scene_surface: *wlr.SceneTree = undefined,
 popup_surface: *wlr.SceneTree = undefined,
 
+// The bounds of the window
 container_bounds: wlr.Box = std.mem.zeroes(wlr.Box),
 floating_bounds: wlr.Box = std.mem.zeroes(wlr.Box),
+
+// TODO: merge monitor and mapped, null should mean unmapped
+// Which monitor the client is on
+monitor: ?*Monitor = null,
+mapped: bool = false,
+
+managed: bool,
+
+// Some window metadata
 label: ?[:0]const u8 = null,
 icon: ?[:0]const u8 = null,
-monitor: ?*Monitor = null,
-managed: bool,
 fullscreen: bool = false,
 frame: ClientFrame = .{},
 visible: bool = true,
 hide_frame: bool = false,
-active: bool = false,
 container_title: bool = false,
-
-link: wl.list.Link = undefined,
-focus_link: wl.list.Link = undefined,
+active: bool = false,
+floating: bool = true,
+container: u8 = 0,
+tag: u8 = 0,
+border: i32 = 0,
+tab: Tab = .{},
 
 dirty: packed struct {
     size: bool = true,
@@ -243,14 +269,6 @@ dirty: packed struct {
     fullscreen: bool = true,
     top: bool = true,
 } = .{},
-
-// properties
-container: u8 = 0,
-floating: bool = true,
-tag: u8 = 0,
-border: i32 = 0,
-tab: Tab = .{},
-mapped: bool = false,
 
 // TODO: move this to config
 const SHADOW_SIZE = 10;
@@ -326,6 +344,7 @@ pub fn update(self: *Client) !void {
         try self.updateTop();
 }
 
+// The bounds of the window and its frame
 pub fn getBounds(self: *Client) wlr.Box {
     if (self.fullscreen)
         if (self.monitor) |m|
@@ -337,6 +356,7 @@ pub fn getBounds(self: *Client) wlr.Box {
         return self.container_bounds;
 }
 
+// The bounds inside the border
 pub fn getInnerBounds(self: *Client) wlr.Box {
     const title_height = self.session.config.getTitleHeight();
     const bounds = self.getBounds();
