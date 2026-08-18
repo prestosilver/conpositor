@@ -8,7 +8,7 @@ Conpositor at its highest level is split into 3 main systems:
 
 - The compositor
 - The lua backend
-- Lua IPC Calling
+- Decoration rendering
 
 There are many parts of Conpositor where I use a "dirty" pattern, this allows me to for example only mark a client frame as dirty when its active status changes. This will then cause the layout to be marked dirty, fixing layout automatically. It may be slightly worse on space and speed, however it removes a lot of inconsistency ive ran into with previous implementations of the project.
 
