@@ -1,6 +1,6 @@
 # Overview
 
-Conpositor has a decent amount of moving parts. This document is here to help contributers get a general idea of where to find things.
+Conpositor has a decent amount of moving parts. This document is here to help contributors get a general idea of where to find things.
 
 ## General structure
 
@@ -10,7 +10,7 @@ Conpositor at its highest level is split into 3 main systems:
 - The lua backend
 - Lua IPC Calling
 
-There are many parts of conpositor where I use a "dirty" pattern, this allows me to for example only mark a client frame as dirty when its active status changes. This will then cause the layout to be marked dirty, fixing layout automatically. It may be slightly worse on space and speed, however it removes alot of inconsistency ive ran into with previous implementations of the project.
+There are many parts of conpositor where I use a "dirty" pattern, this allows me to for example only mark a client frame as dirty when its active status changes. This will then cause the layout to be marked dirty, fixing layout automatically. It may be slightly worse on space and speed, however it removes a lot of inconsistency ive ran into with previous implementations of the project.
 
 ## The lua backend
 
