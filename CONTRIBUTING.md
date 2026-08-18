@@ -24,4 +24,4 @@ When you submit a PR to conpositor there is only one way to guarantee its mergin
 
 Every .zig file should contain notes for implementation contracts at the top, make sure you follow those at the very least. As of right now it'll likely end up being me who reviews your code.
 
-Please format with zig-fmt, and abide by the https://ziglang.org/documentation/master/#Style-Guide. I will comment if theres anything that nags me. As with many other places in this doc, I plan to mature this spec with conpositor.
+Please format with zig-fmt, and abide by the [Zig style guide](https://ziglang.org/documentation/master/#Style-Guide). I will comment if theres anything that nags me, but so long as zig-fmt agrees I will likely approve. As with many other places in this doc, I plan to mature this spec with conpositor.
