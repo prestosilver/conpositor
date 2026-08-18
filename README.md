@@ -19,20 +19,12 @@ Conpositor is a wayland compositor where you don't have to move your windows. I 
 
 ## Config
 
-More documentation to come later, for now see [the sample config.](docs/init.lua)
+Conpositor can be configured in lua, for a basic overview of its capabilities see [my personal config](docs/init.lua).
 
 ## Screenshots
 
-We have window frames for every environment you can think of!
+![Conpositor with 5 containers](docs/screenshot1.png)
 
-### Sparse
+## Contributing
 
-![Busy](docs/screenshot3.png)
-
-### Busy
-
-![Kinda busy](docs/screenshot1.png)
-
-### Busy and Dense
-
-![Super Busy and Dense](docs/screenshot2.png)
+Conpositor welcomes any contributions, please read [CONTRIBUTING.md](CONTRIBUTING.md) for more info. An overview of the general project structure can also be found in [ARCHITECTURE.md](ARCHITECTURE.md)
