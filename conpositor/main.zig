@@ -1,4 +1,4 @@
-// The entry point for conpositor
+// The entry point for Conpositor
 //
 // NOTES:
 // This should not define any types

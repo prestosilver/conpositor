@@ -554,7 +554,7 @@ pub fn pushT(lua: *Lua, self: anytype, name: [:0]const u8) void {
     lua.setMetatable(-2);
 }
 
-// Transmits a hook event from conpositor->lua
+// Transmits a hook event from Conpositor->lua
 pub fn sendEvent(self: *Self, comptime T: type, event_id: LuaSession.Event, data: T) Error!bool {
     return self.session.sendEvent(T, self.lua, event_id, data);
 }

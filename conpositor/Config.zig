@@ -103,7 +103,7 @@ pub fn init(self: *Config) Error!void {
             .max = original.max,
         };
         if (std.posix.setrlimit(.NOFILE, new)) {
-            std.log.debug("raised file descriptor limit of the conpositor process to {d}", .{new.cur});
+            std.log.debug("raised file descriptor limit of the Conpositor process to {d}", .{new.cur});
         } else |_| {
             std.log.err("setrlimit failed, using system default file descriptor limit of {d}", .{
                 original.cur,
@@ -230,7 +230,7 @@ pub fn conpositorLogFn(
     defer std.debug.unlockStderr();
 
     const scope_prefix = "(" ++ switch (scope) {
-        std.log.default_log_scope => "conpositor",
+        std.log.default_log_scope => "Conpositor",
         else => @tagName(scope),
     } ++ "): ";
 

@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <protocol name="conpositor_lua_unstable_v1">
     <description summary="Run lua code in conpositor.">
-        This protocol is used to run lua code in conpositor.
+        This protocol is used to run lua code in Conpositor.
     </description>
 
     <interface name="conpositor_lua_manager_v1" version="1">
         <description summary="Create lua instances">
-            This interface is used to run lua code in conpositor.
+            This interface is used to run lua code in Conpositor.
         </description>
         
         <request name="create_runner">

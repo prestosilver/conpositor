@@ -171,7 +171,7 @@ function M.spawn(...)
     end
 end
 
---- Creates a callback that quits conpositor
+--- Creates a callback that quits Conpositor
 --- @return fun() # Returns a function callback
 function M.quit()
     return function()
