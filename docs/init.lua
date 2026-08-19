@@ -1,7 +1,7 @@
--- require some builtin libraries
-local gaps = require("lib.gaps")
-local funcs = require("lib.funcs")
-local mouse = require("lib.mouse")
+--- @module 'types.all'
+local gaps = require("lib.gaps") --- @class gaps
+local funcs = require("lib.funcs") --- @class funcs
+local mouse = require("lib.mouse") --- @class mouse
 
 -- add this first in case of crash
 session:add_bind("AS", "Escape", funcs.quit())
