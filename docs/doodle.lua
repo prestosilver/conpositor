@@ -25,7 +25,11 @@ local super = force_debug or session.is_debug() and "A" or "L"
 
 -- create my containers
 local stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
-local tags = { f1 = 1, f2 = 2, f3 = 3, f4 = 4 }
+local tags = { "F1", "F2", "F3", "F4" }
+
+for tag, name in pairs(tags) do
+    session.tags[tag].name = name
+end
 
 local function layout(align, reverse)
     local align_id = 0
@@ -235,7 +239,7 @@ end
 
 local active_tag_module = {}
 active_tag_module.text = function(monitor)
-    return "F" .. session:get_active_monitor().tag
+    return session:active_monitor().active_tag.name
 end
 
 local default_bars = {
