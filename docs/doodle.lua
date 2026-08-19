@@ -94,17 +94,16 @@ for align_index, align in ipairs { "right", "center", "left" } do
         if reverse == true then brackets = { "]", "[" } end
 
         local layout_index = layout(align, reverse)
-
-        layouts[layout_index] = session:new_layout(brackets[1] .. " " .. align_text .. " " .. brackets[2])
+        session.layouts[layout_index].name = brackets[1] .. " " .. align_text .. " " .. brackets[2]
 
         local aligned_ab_split = ab_split
         if align == "center" then aligned_ab_split = 0.5 end
         if align == "left" then aligned_ab_split = 1.0 - ab_split end
 
-        setup_abcd(layouts[layout_index].root, aligned_ab_split, ac_split, bd_split, reverse)
+        setup_abcd(session.layouts[layout_index].root, aligned_ab_split, ac_split, bd_split, reverse)
 
-        align_cycle[reverse_index][align_index] = layouts[layout_index]
-        reverse_cycle[align_index][reverse_index] = layouts[layout_index]
+        align_cycle[reverse_index][align_index] = session.layouts[layout_index]
+        reverse_cycle[align_index][reverse_index] = session.layouts[layout_index]
     end
 end
 
@@ -209,9 +208,7 @@ local function debug_window_set(value)
 
     return function()
         local client = session:active_client()
-        if client then
-            client.modules = modules
-        end
+        if client then client.modules = modules end
     end
 end
 
@@ -221,44 +218,40 @@ time_module.text = function(monitor)
     return "TIME O CLOCK"
 end
 
-local layout_module = {}
-layout_module.text = function(monitor)
-    return layout_names[session:get_active_monitor().layout]
+local active_layout_module = {}
+active_layout_module.palette = mondo.inactive
+active_layout_module.text = function(monitor)
+    return monitor.layout.name
+end
+
+local active_tag_module = {}
+active_tag_module.text = function(monitor)
+    return monitor.layout.name
+end
+
+local active_client_icon_module = {}
+active_client_icon_module.text = function(monitor)
+    local client = monitor:active_client()
+
+    if client then return client.icon end
+    return "󰍹"
 end
 
 local active_client_module = {}
 active_client_module.palette = mondo.inactive
 active_client_module.text = function(monitor)
-    local client = monitor:get_active_client()
-    if client then
-        return client.title
-    else
-        return "Desktop"
-    end
-end
+    local client = monitor:active_client()
 
-local active_client_icon = {}
-active_client_icon.palette = mondo.inactive
-active_client_icon.text = function(monitor)
-    local client = monitor:get_active_client()
-    if client then
-        return client.icon
-    else
-        return "󰍹"
-    end
-end
-
-local active_tag_module = {}
-active_tag_module.text = function(monitor)
-    return session:active_monitor().active_tag.name
+    if client then return client.title end
+    return "Desktop"
 end
 
 local default_bars = {
     top = {
         palette = mondo.active,
 
-        left = { layout_module, tag_module, },
-        center = { active_client_icon, active_client_module },
+        left = { active_layout_module, tag_module, },
+        center = { active_client_icon_module, active_client_module },
         right = { time_module }
     }
 }
@@ -372,12 +365,12 @@ session:add_hooks {
         session:spawn("/usr/lib/gsd-xsettings")
     end
 
-    add_monitor = function(monitor)
+    new_monitor = function(monitor)
         monitor.layout = default_layout
         monitor.bars = default_bars
     end
 
-    add_client = function(client)
+    new_client = function(client)
         client.modules = default_modules
         client.stack = stacks.c
         client.floating = true
