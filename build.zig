@@ -4,6 +4,29 @@ const Scanner = @import("wayland").Scanner;
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const options = .{
+        .enable_ztracy = b.option(
+            bool,
+            "enable_ztracy",
+            "Enable Tracy profile markers",
+        ) orelse false,
+        .enable_fibers = b.option(
+            bool,
+            "enable_fibers",
+            "Enable Tracy fiber support",
+        ) orelse false,
+        .on_demand = b.option(
+            bool,
+            "on_demand",
+            "Build tracy with TRACY_ON_DEMAND",
+        ) orelse false,
+    };
+
+    const ztracy = b.dependency("ztracy", .{
+        .enable_ztracy = options.enable_ztracy,
+        .enable_fibers = options.enable_fibers,
+        .on_demand = options.on_demand,
+    });
 
     // Wayland protocols to zig
     const scanner = Scanner.create(b, .{});
@@ -94,9 +117,11 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "pixman", .module = pixman_dep.module("pixman") },
                 .{ .name = "zlua", .module = lua_dep.module("zlua") },
                 .{ .name = "known-folders", .module = known_folders_dep.module("known-folders") },
+                .{ .name = "ztracy", .module = ztracy.module("root") },
             },
         }),
     });
+    conpositor.root_module.linkLibrary(ztracy.artifact("tracy"));
 
     conpositor.root_module.linkSystemLibrary("lua", .{});
     conpositor.root_module.linkSystemLibrary("wayland-server", .{});
