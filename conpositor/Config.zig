@@ -2,8 +2,9 @@ const std = @import("std");
 const zlua = @import("zlua");
 const wlr = @import("wlroots");
 const xkb = @import("xkbcommon");
-const c = @import("c.zig").c;
 const known_folders = @import("known-folders");
+
+const c = @import("c.zig").c;
 
 const LuaContext = @import("LuaContext.zig");
 

@@ -80,7 +80,7 @@ pub fn getTitle(self: *Self) ?[:0]const u8 {
     return self.child.getTitle();
 }
 
-pub fn setTag(self: *Self, tag: *LuaTag) void {
+pub fn setTag(self: *Self, tag: LuaTag) void {
     self.child.setTag(tag.id);
 }
 

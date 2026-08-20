@@ -31,7 +31,7 @@ pub fn getActiveTag(self: *Self) !LuaTag {
     return .{ .id = self.child.tag };
 }
 
-pub fn setActiveTag(self: *Self, tag: *LuaTag) void {
+pub fn setActiveTag(self: *Self, tag: LuaTag) void {
     self.child.setActiveTag(tag.id);
 
     std.log.debug("Set monitor {f} tag to {f}", .{ self, tag });

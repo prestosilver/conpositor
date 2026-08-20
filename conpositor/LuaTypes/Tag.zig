@@ -15,11 +15,18 @@ pub fn format(self: Self, writer: *std.Io.Writer) !void {
 }
 
 pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !Self {
-    _ = lua.getField(index, "instance");
-    const result = try lua.toUserdata(Self, -1);
-    lua.pop(1);
+    var result: Self = .{ .id = 0 };
 
-    return result.*;
+    if (lua.isInteger(index)) {
+        const value = lua.toNumber(index) catch 0;
+        result.id = std.math.lossyCast(u8, value);
+    } else {
+        _ = lua.getField(index, "instance");
+        result = (try lua.toUserdata(Self, -1)).*;
+        lua.pop(1);
+    }
+
+    return result;
 }
 
 pub fn toLua(self: Self, lua: *Lua) void {
