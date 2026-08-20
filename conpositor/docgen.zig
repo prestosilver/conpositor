@@ -1,6 +1,5 @@
 const std = @import("std");
 
-// This is used to generate lsp docs from the lua types defined in the context file.
 const LUA_TYPES = @import("LuaContext.zig").LUA_TYPES;
 
 var dbg_allocator: std.heap.DebugAllocator(.{}) = .init;

@@ -15,6 +15,8 @@ const ClientError = cairo.Error;
 
 const allocator = Config.allocator;
 
+const trace = @import("trace.zig");
+
 const SurfaceKind = enum { XDG, X11 };
 const FrameKind = enum { hide, border, title };
 
@@ -89,7 +91,6 @@ const Events = struct {
         dissociate_event: wl.Listener(void) = .init(XEvents.dissociate),
         configure_event: wl.Listener(*wlr.XwaylandSurface.event.Configure) = .init(XEvents.configure),
         set_hints_event: wl.Listener(void) = .init(XEvents.setHints),
-        deinit_event: wl.Listener(void) = .init(XEvents.deinit),
 
         fn activate(listener: *wl.Listener(void)) void {
             const xevents: *XEvents = @fieldParentPtr("activate_event", listener);
@@ -140,32 +141,13 @@ const Events = struct {
                 @panic(@errorName(ex));
             };
         }
-
-        fn deinit(listener: *wl.Listener(void)) void {
-            const xevents: *XEvents = @fieldParentPtr("deinit_event", listener);
-            const events: *Events = @fieldParentPtr("xevents", xevents);
-            const client: *Client = @fieldParentPtr("events", events);
-
-            client.deinit();
-        }
     };
 
-    commit_event: wl.Listener(*wlr.Surface) = .init(Events.commit),
     map_event: wl.Listener(void) = .init(Events.map),
     unmap_event: wl.Listener(void) = .init(Events.unmap),
-    deinit_event: wl.Listener(*wlr.Surface) = .init(Events.deinit),
     set_title_event: wl.Listener(void) = .init(Events.setTitle),
     fullscreen_event: wl.Listener(void) = .init(Events.fullscreen),
     xevents: XEvents = .{},
-
-    fn commit(listener: *wl.Listener(*wlr.Surface), _: *wlr.Surface) void {
-        const events: *Events = @fieldParentPtr("commit_event", listener);
-        const client: *Client = @fieldParentPtr("events", events);
-
-        client.commit() catch |ex| {
-            @panic(@errorName(ex));
-        };
-    }
 
     fn map(listener: *wl.Listener(void)) void {
         const events: *Events = @fieldParentPtr("map_event", listener);
@@ -183,13 +165,6 @@ const Events = struct {
         client.unmap() catch |ex| {
             @panic(@errorName(ex));
         };
-    }
-
-    fn deinit(listener: *wl.Listener(*wlr.Surface), _: *wlr.Surface) void {
-        const events: *Events = @fieldParentPtr("deinit_event", listener);
-        const client: *Client = @fieldParentPtr("events", events);
-
-        client.deinit();
     }
 
     fn setTitle(listener: *wl.Listener(void)) void {
@@ -212,6 +187,9 @@ client_id: u8 = 10,
 session: *Session,
 surface: ClientSurface,
 events: Events = .{},
+
+commit_event: trace.Event(*wlr.Surface, "commit", Client) = .{},
+deinit_event: trace.Event(void, "deinit", Client) = .{},
 
 scene: *wlr.SceneTree = undefined,
 scene_surface: *wlr.SceneTree = undefined,
@@ -268,10 +246,10 @@ pub fn init(session: *Session, target: ClientSurface) !void {
 
             std.log.debug("Add xdg surface {*} to {*}", .{ target.XDG, client });
 
-            surface.surface.events.commit.add(&client.events.commit_event);
+            surface.surface.events.commit.add(&client.commit_event.event);
             surface.surface.events.map.add(&client.events.map_event);
             surface.surface.events.unmap.add(&client.events.unmap_event);
-            surface.surface.events.destroy.add(&client.events.deinit_event);
+            surface.events.destroy.add(&client.deinit_event.event);
 
             std.log.debug("Created client {*}", .{client});
 
@@ -293,7 +271,7 @@ pub fn init(session: *Session, target: ClientSurface) !void {
             surface.events.request_activate.add(&client.events.xevents.activate_event);
             surface.events.request_configure.add(&client.events.xevents.configure_event);
             surface.events.set_hints.add(&client.events.xevents.set_hints_event);
-            surface.events.destroy.add(&client.events.xevents.deinit_event);
+            surface.events.destroy.add(&client.deinit_event.event);
 
             std.log.debug("Created x11 client {*}", .{client});
         },
@@ -1147,7 +1125,7 @@ fn updateSizeSerial(self: *Client) u32 {
     return self.surface.XDG.role_data.toplevel.?.setSize(inner.width, inner.height);
 }
 
-fn commit(self: *Client) !void {
+pub fn commit(self: *Client, _: *wlr.Surface) !void {
     if (self.surface.XDG.role_data.toplevel) |toplevel|
         _ = toplevel.configure(&.{
             .fields = .{
@@ -1245,16 +1223,16 @@ fn unmap(self: *Client) !void {
     self.setLabel(null);
 }
 
-fn deinit(self: *Client) void {
+pub fn deinit(self: *Client) !void {
     switch (self.surface) {
         .XDG => {
-            self.events.deinit_event.link.remove();
-            self.events.commit_event.link.remove();
+            self.deinit_event.event.link.remove();
+            self.commit_event.event.link.remove();
             self.events.map_event.link.remove();
             self.events.unmap_event.link.remove();
         },
         .X11 => {
-            self.events.xevents.deinit_event.link.remove();
+            self.deinit_event.event.link.remove();
             self.events.xevents.activate_event.link.remove();
             self.events.xevents.associate_event.link.remove();
             self.events.xevents.dissociate_event.link.remove();

@@ -10,6 +10,8 @@ const Session = @import("Session.zig");
 const Client = @import("Client.zig");
 const Layout = @import("Layout.zig");
 
+const trace = @import("trace.zig");
+
 const Monitor = @This();
 
 const allocator = Config.allocator;
@@ -40,38 +42,9 @@ dirty: packed struct {
     focus: bool = false,
 } = .{},
 
-events: Events = .{},
-
-const Events = struct {
-    frame_event: wl.Listener(*wlr.Output) = .init(Events.frame),
-    deinit_event: wl.Listener(*wlr.Output) = .init(Events.deinit),
-    present_event: wl.Listener(*wlr.Output.event.Present) = .init(Events.present),
-
-    fn present(listener: *wl.Listener(*wlr.Output.event.Present), _: *wlr.Output.event.Present) void {
-        const events: *Monitor.Events = @fieldParentPtr("present_event", listener);
-        const self: *Monitor = @fieldParentPtr("events", events);
-
-        self.present() catch |ex| {
-            @panic(@errorName(ex));
-        };
-    }
-
-    fn frame(listener: *wl.Listener(*wlr.Output), _: *wlr.Output) void {
-        const events: *Monitor.Events = @fieldParentPtr("frame_event", listener);
-        const self: *Monitor = @fieldParentPtr("events", events);
-
-        self.frame() catch |ex| {
-            @panic(@errorName(ex));
-        };
-    }
-
-    fn deinit(listener: *wl.Listener(*wlr.Output), _: *wlr.Output) void {
-        const events: *Monitor.Events = @fieldParentPtr("deinit_event", listener);
-        const self: *Monitor = @fieldParentPtr("events", events);
-
-        self.deinit();
-    }
-};
+deinit_event: trace.Event(*wlr.Output, "deinit", Monitor) = .{},
+frame_event: trace.Event(*wlr.Output, "frame", Monitor) = .{},
+present_event: trace.Event(*wlr.Output.event.Present, "present", Monitor) = .{},
 
 pub fn init(session: *Session, output: *wlr.Output) !void {
     if (!output.initRender(session.wlr_allocator, session.renderer))
@@ -135,9 +108,9 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
     for (&result.layers) |*layer|
         layer.init();
 
-    output.events.frame.add(&result.events.frame_event);
-    output.events.present.add(&result.events.present_event);
-    output.events.destroy.add(&result.events.deinit_event);
+    output.events.frame.add(&result.frame_event.event);
+    output.events.present.add(&result.present_event.event);
+    output.events.destroy.add(&result.deinit_event.event);
 
     const layout_output = try session.output_layout.add(result.output, result.mode.x, result.mode.y);
 
@@ -276,17 +249,17 @@ pub fn setLayout(self: *Monitor, layout: ?*Layout) void {
     self.dirty.force_layout = true;
 }
 
-fn deinit(self: *Monitor) void {
-    self.events.present_event.link.remove();
-    self.events.frame_event.link.remove();
-    self.events.deinit_event.link.remove();
+pub fn deinit(self: *Monitor, _: *wlr.Output) !void {
+    self.present_event.event.link.remove();
+    self.frame_event.event.link.remove();
+    self.deinit_event.event.link.remove();
 
     self.link.remove();
 
     allocator.destroy(self);
 }
 
-fn frame(self: *Monitor) !void {
+pub fn frame(self: *Monitor, _: *wlr.Output) !void {
     // TODO:Figure out why this skips
 
     // const tmp_now: std.posix.timespec = std.posix.clock_gettime(std.posix.CLOCK.MONOTONIC) catch
@@ -336,7 +309,7 @@ fn frame(self: *Monitor) !void {
     pending.finish();
 }
 
-fn present(self: *Monitor) !void {
+pub fn present(self: *Monitor, _: *wlr.Output.event.Present) !void {
     if (self.dirty.layout or self.dirty.force_layout)
         try self.updateLayout();
 

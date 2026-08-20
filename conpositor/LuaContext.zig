@@ -1,3 +1,6 @@
+// This file abstracts away most of zlua, it is used to get an
+// object oriented feel from the interface.
+
 const std = @import("std");
 const zlua = @import("zlua");
 
@@ -48,6 +51,7 @@ pub const LuaType = struct {
     methods: []const LuaMethod,
     gc: ?LuaMethod = null,
 
+    // Registers a type with a zlua context
     pub inline fn addTo(comptime self: LuaType, lua: *Lua) Error!void {
         _ = lua.getGlobal("_GenerateType");
 
@@ -155,6 +159,7 @@ pub const LuaType = struct {
     }
 };
 
+// TODO: Extract LUA_TYPES into the LuaTypes folder
 pub const LUA_TYPES = [_]LuaType{
     .{
         .impl = @import("LuaTypes/TextModule.zig"),
