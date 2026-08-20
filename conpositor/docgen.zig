@@ -78,6 +78,9 @@ pub fn main(init: std.process.Init) !void {
                     defer allocator.free(text);
                     try all_writer.interface.writeAll(text);
                 },
+                .hidden_function => {
+                    // Hidden functions are un documented.
+                },
             }
         }
 

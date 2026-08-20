@@ -42,7 +42,7 @@ pub const LuaType = struct {
         description: []const u8,
 
         binding_mode: enum { raw, auto },
-        kind: enum { function, method, getter, setter } = .method,
+        kind: enum { function, method, getter, setter, hidden_function } = .method,
     };
 
     impl: type,
@@ -72,7 +72,7 @@ pub const LuaType = struct {
 
         inline for (self.methods) |method| {
             const index = switch (method.kind) {
-                .function => -5,
+                .function, .hidden_function => -5,
                 .method => -4,
                 .getter => -3,
                 .setter => -2,
@@ -172,6 +172,7 @@ pub const LUA_TYPES = [_]LuaType{
             .lua_name = "__gc",
             .description = "Frees",
             .binding_mode = .auto,
+            .kind = .hidden_function,
         },
         .methods = &.{
             .{
@@ -414,6 +415,7 @@ pub const LUA_TYPES = [_]LuaType{
                 .description = "Returns the tag at index",
 
                 .binding_mode = .auto,
+                .kind = .hidden_function,
             },
             .{
                 .impl_name = "quit",
