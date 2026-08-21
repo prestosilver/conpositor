@@ -1,3 +1,10 @@
+// Config is used as the interface between LuaContext and the session instance
+// This allows for lua to be swapped out on the chance I would later like to,
+// or the ability to switch to luajit for increased preformance if that becomes
+// an issue.
+//
+// NOTES:
+// If this is implemented properly nothing else should import LuaContext
 const std = @import("std");
 const zlua = @import("zlua");
 const wlr = @import("wlroots");
@@ -8,6 +15,7 @@ const c = @import("c.zig").c;
 
 const LuaContext = @import("LuaContext.zig");
 
+// TODO: since lua context is an abstraction over lua this should not import these
 const LuaClient = @import("LuaTypes/Client.zig");
 const LuaSession = @import("LuaTypes/Session.zig");
 const LuaVector = @import("LuaTypes/Vector.zig");
@@ -20,8 +28,6 @@ const Monitor = @import("Monitor.zig");
 const Config = @This();
 
 pub const Error = LuaContext.Error || known_folders.Error;
-
-// TODO: replace catch lua.raiseErrorStr("Not a T", .{}); with a proper call like the auto lua to avoid inconsistency
 
 pub const allocator_data = if (@import("builtin").mode == .Debug) struct {
     var gpa: std.heap.DebugAllocator(.{
@@ -42,7 +48,9 @@ pub const allocator_data = if (@import("builtin").mode == .Debug) struct {
 
 pub const allocator = allocator_data.allocator;
 
+// TODO: Lua context should not be owned by config
 lua: LuaContext,
+
 io: std.Io,
 environ_map: *const std.process.Environ.Map,
 home_path: []const u8 = undefined,
@@ -96,7 +104,7 @@ pub fn init(self: *Config) Error!void {
             .max = original.max,
         };
         if (std.posix.setrlimit(.NOFILE, new)) {
-            std.log.debug("raised file descriptor limit of the conpositor process to {d}", .{new.cur});
+            std.log.debug("raised file descriptor limit of the Conpositor process to {d}", .{new.cur});
         } else |_| {
             std.log.err("setrlimit failed, using system default file descriptor limit of {d}", .{
                 original.cur,
@@ -165,14 +173,17 @@ pub fn getLayouts(self: *Config) []*Layout {
     return self.layouts.items;
 }
 
+// TODO: should be stored here
 pub fn getTags(self: *Config) [][:0]const u8 {
     return self.lua.session.tags.items;
 }
 
+// TODO: should be stored here
 pub fn getTitlePad(self: *Config) i32 {
     return self.lua.session.title_pad;
 }
 
+// TODO: should be stored here
 pub fn getTitleHeight(self: *Config) i32 {
     return self.lua.session.font.size + 2 * self.lua.session.title_pad;
 }
@@ -191,6 +202,8 @@ pub fn sourcePath(self: *Config, path: []const u8) Error!void {
     return self.lua.runFile(file);
 }
 
+// runs a command
+// TODO: Should this be moved outside of here?
 pub fn run(self: *Config, command: []const u8) !LuaContext.RunResult {
     return self.lua.run(command);
 }
@@ -199,6 +212,7 @@ pub fn sendEvent(self: *Config, comptime T: type, event_id: LuaSession.Event, da
     return self.lua.sendEvent(T, event_id, data);
 }
 
+// TODO: Should debug utils like this be broken out somewhere
 pub fn conpositorLogFn(
     comptime level: std.log.Level,
     comptime scope: @TypeOf(.EnumLiteral),
@@ -217,7 +231,7 @@ pub fn conpositorLogFn(
     defer std.debug.unlockStderr();
 
     const scope_prefix = "(" ++ switch (scope) {
-        std.log.default_log_scope => "conpositor",
+        std.log.default_log_scope => "Conpositor",
         else => @tagName(scope),
     } ++ "): ";
 
@@ -246,6 +260,7 @@ pub fn deinit(self: *Config) void {
     allocator.free(self.home_path);
 }
 
+// Signal that an object was freed
 pub fn destroy(self: *Config, kind: [:0]const u8, base: anytype) void {
     self.lua.destroy(kind, base);
 }

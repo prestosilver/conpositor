@@ -165,20 +165,22 @@ pub fn draw(
     context.setSourceRgba(bg[2], bg[1], bg[0], bg[3]);
     context.paint();
 
-    context.moveTo(
-        @floatFromInt(surf_bounds.x + client.border + title_pad),
-        @floatFromInt(client.border + title_pad + @divTrunc(font.size - left_height, 2) - left_y_bearing),
-    );
-    context.setSource(&left_pattern);
-    context.textPath(left_text);
-    context.fill();
-
+    // center first to avoid artifacting
     context.moveTo(
         @floatFromInt(surf_bounds.x + @divTrunc(surf_bounds.width - center_width, 2)),
         @floatFromInt(client.border + title_pad + @divTrunc(font.size - center_height, 2) - center_y_bearing),
     );
     context.setSource(&center_pattern);
     context.textPath(center_text);
+    context.fill();
+
+    // now on to left and right
+    context.moveTo(
+        @floatFromInt(surf_bounds.x + client.border + title_pad),
+        @floatFromInt(client.border + title_pad + @divTrunc(font.size - left_height, 2) - left_y_bearing),
+    );
+    context.setSource(&left_pattern);
+    context.textPath(left_text);
     context.fill();
 
     context.moveTo(

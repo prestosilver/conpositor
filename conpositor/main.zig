@@ -1,3 +1,7 @@
+// The entry point for Conpositor
+//
+// NOTES:
+// This should not define any types
 const std = @import("std");
 const builtin = @import("builtin");
 
@@ -14,6 +18,7 @@ const ConpositorError =
     Session.Error ||
     Config.Error;
 
+// This main function should only construct the high level storage types
 pub fn main(init: std.process.Init) ConpositorError!void {
     defer Config.allocator_data.deinit();
 

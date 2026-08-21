@@ -1,6 +1,9 @@
-// This file abstracts away most of zlua, it is used to get an
-// object oriented feel from the interface.
-
+// This is an abstraction over zlua that allows for cleaner automated
+// oop bindings.
+//
+// NOTES:
+// If this is implemented properly zlua should not be imported by anything
+//      outside of this and LuaTypes
 const std = @import("std");
 const zlua = @import("zlua");
 
@@ -561,6 +564,8 @@ is_init: bool = false,
 lua: *Lua = undefined,
 session: LuaSession,
 
+// Used to push an instance onto the stack
+// TODO: break out the impl into a function in type_gen.lua
 pub fn pushT(lua: *Lua, self: anytype, name: [:0]const u8) void {
     lua.newTable();
 
@@ -575,10 +580,7 @@ pub fn pushT(lua: *Lua, self: anytype, name: [:0]const u8) void {
     lua.setMetatable(-2);
 }
 
-fn roFunction() !void {
-    return error.AssignToReadOnly;
-}
-
+// Transmits a hook event from Conpositor->lua
 pub fn sendEvent(self: *Self, comptime T: type, event_id: LuaSession.Event, data: T) Error!bool {
     return self.session.sendEvent(T, self.lua, event_id, data);
 }

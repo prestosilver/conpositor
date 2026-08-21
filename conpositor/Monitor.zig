@@ -1,7 +1,11 @@
+// The monitor object is primarily an abstraction over wayland outputs,
+// it also maintains storing what portion of layouts is dirty.
+//
+// NOTES:
+const conpositor = @import("wayland").server.conpositor;
 const wl = @import("wayland").server.wl;
 const wlr = @import("wlroots");
 const std = @import("std");
-const conpositor = @import("wayland").server.conpositor;
 
 const IpcManager = @import("IpcManager.zig");
 const LayerSurface = @import("LayerSurface.zig");
@@ -17,22 +21,49 @@ const Monitor = @This();
 const allocator = Config.allocator;
 
 const TOTAL_LAYERS = 4;
+
+// Layers that render above clients
 const LAYERS_ABOVE_SHELL = [_]u32{ 3, 2 };
 
+// A ref to the parent session, useful for quick access
 session: *Session,
+
+// The next monitor
+link: wl.list.Link = undefined,
+
+// The associated object
 output: *wlr.Output,
 scene_output: *wlr.SceneOutput,
+
+// Used to clear the background when a window is fullscreen, but doesnt fill
 fullscreen_bg: *wlr.SceneRect,
-window: wlr.Box,
+
+// The resolution and position of the monitor
 mode: wlr.Box,
+
+// the working bounds of the monitor
+window: wlr.Box,
+
+// Layer surface lists
 layers: [TOTAL_LAYERS]wl.list.Head(LayerSurface, .link) = undefined,
+
+// What tag is active on the monitor
 tag: u8 = 0,
+
+// The monitors active layout.
 layout: ?*Layout = null,
-link: wl.list.Link = undefined,
+
+// Gaps values
+// inner gaps are window-window boundries
+// outer gaps are window-margin boundries
 gaps_inner: i32 = 0,
 gaps_outer: i32 = 0,
 
+// TODO: Is this really optimal?
+// used to calculate if the monitor is now dirty
 last_usage: [256]bool = .{false} ** 256,
+
+// TODO: Is this nessesary
 last_frame: std.posix.timespec = .{ .sec = 0, .nsec = 0 },
 
 dirty: packed struct {
@@ -105,6 +136,7 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
         .mode = std.mem.zeroes(wlr.Box),
         .window = std.mem.zeroes(wlr.Box),
     };
+
     for (&result.layers) |*layer|
         layer.init();
 
@@ -120,6 +152,7 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
 
     try session.updateMons();
 
+    // Tell lua that a monitor was created.
     _ = try session.config.sendEvent(@import("LuaTypes/Monitor.zig"), .add_monitor, .{ .child = result });
 }
 

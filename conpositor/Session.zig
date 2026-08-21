@@ -798,7 +798,7 @@ pub fn getSurfaceObjects(self: *Session, surface: *wlr.Surface) ObjectData {
 }
 
 pub fn quit(self: *Session) void {
-    std.log.info("Quitting conpositor", .{});
+    std.log.info("Quitting Conpositor", .{});
     self.server.terminate();
 }
 
