@@ -94,7 +94,9 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("conpositor/docgen.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{},
+            .imports = &.{
+                .{ .name = "zlua", .module = lua_dep.module("zlua") },
+            },
         }),
     });
 

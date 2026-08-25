@@ -26,7 +26,7 @@
             .hash = "wayland-0.7.0-dev-lQa1kl38AQC-kQolS5D4jV1GJ2rH2jv1VWHr14YLVnyn",
         },
         .zlua = .{
-            .url = "git+https://github.com/natecraddock/ziglua#d2cb6191ec20f888ab04ad222c9bcf9b194bfbf2",
+            .url = "git+https://github.com/natecraddock/ziglua#9ae39fa50b1ab8427d35f963216116d7bff1e584",
             .hash = "zlua-0.1.0-hGRpC1mUBQCNQf4CnmRTM4I7gxE3YpCvZ-p2EarlcyER",
         },
         .known_folders = .{
