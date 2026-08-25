@@ -322,8 +322,7 @@ pub fn frame(self: *Monitor, _: *wlr.Output) !void {
     commit: {
         var iter = self.session.clients.iterator(.forward);
         while (iter.next()) |client| {
-            if (client.dirty.size == true and
-                client.surface == .XDG and
+            if (client.resize != 0 and
                 client.monitor == self and
                 client.visible and
                 !client.isStopped())
