@@ -28,7 +28,7 @@ pub fn main(init: std.process.Init) !void {
     var all_writer = all.writer(init.io, &.{});
 
     inline for (LUA_TYPES) |lua_type| {
-        const class_text = try std.fmt.allocPrint(allocator,
+        try all_writer.interface.print(
             \\---@class {s}
             \\---{s}
             \\
@@ -36,70 +36,117 @@ pub fn main(init: std.process.Init) !void {
             lua_type.lua_name,
             lua_type.description,
         });
-        defer allocator.free(class_text);
-        try all_writer.interface.writeAll(class_text);
 
-        for (lua_type.methods) |method| {
-            switch (method.kind) {
-                .getter => {
-                    const new_desc = try std.mem.replaceOwned(u8, allocator, method.description, "\n", "\n---");
-                    defer allocator.free(new_desc);
+        inline for (.{ .getter, .setter, .method, .function }) |check| {
+            for (lua_type.methods) |method| {
+                if (check != method.kind)
+                    continue;
 
-                    const text = try std.fmt.allocPrint(allocator,
-                        \\---@field {s} any {s}
-                        \\
-                    , .{ method.lua_name, new_desc });
-                    defer allocator.free(text);
-                    try all_writer.interface.writeAll(text);
-                },
-                .setter => {},
-                .method => {
-                    const new_desc = try std.mem.replaceOwned(u8, allocator, method.description, "\n", "\n---");
-                    defer allocator.free(new_desc);
+                const new_desc = try std.mem.replaceOwned(u8, allocator, method.description, "\n", "\n---");
+                defer allocator.free(new_desc);
 
-                    const text = try std.fmt.allocPrint(allocator,
-                        \\---@param self {s}
-                        \\---{s}
-                        \\function {s}.{s}(self, ...)end
-                        \\
-                    , .{ lua_type.lua_name, new_desc, lua_type.lua_name, method.lua_name });
-                    defer allocator.free(text);
-                    try all_writer.interface.writeAll(text);
-                },
-                .function => {
-                    const new_desc = try std.mem.replaceOwned(u8, allocator, method.description, "\n", "\n---");
-                    defer allocator.free(new_desc);
+                if (method.kind == .setter) {
+                    if (for (lua_type.methods) |other_method| {
+                        if (std.mem.eql(u8, method.lua_name, other_method.lua_name) and other_method.kind == .getter)
+                            break true;
+                    } else false) continue;
+                }
 
-                    const text = try std.fmt.allocPrint(allocator,
-                        \\---{s}
-                        \\function {s}.{s}(...)end
-                        \\
-                    , .{ new_desc, lua_type.lua_name, method.lua_name });
-                    defer allocator.free(text);
-                    try all_writer.interface.writeAll(text);
-                },
-                .hidden_function => {
-                    // Hidden functions are un documented.
-                },
+                switch (method.kind) {
+                    .getter, .setter => {
+                        const text = try std.fmt.allocPrint(allocator,
+                            \\---@field {s} {s} {s}
+                            \\
+                        , .{ method.lua_name, if (method.returns) |ret| ret.kind else "any", new_desc });
+                        defer allocator.free(text);
+                        try all_writer.interface.writeAll(text);
+                    },
+                    .method => {
+                        try all_writer.interface.print(
+                            \\---{s}
+                            \\
+                        , .{new_desc});
+
+                        for (method.params) |param| {
+                            try all_writer.interface.print(
+                                \\---@param {s} {s} {s}
+                                \\
+                            , .{ param.name, param.kind, param.desc });
+                        }
+
+                        if (method.returns) |returns| {
+                            try all_writer.interface.print(
+                                \\---@return {s} {s} {s}
+                                \\
+                            , .{ returns.kind, returns.name, returns.desc });
+                        }
+
+                        try all_writer.interface.print(
+                            \\function {s}:{s}(
+                        , .{ lua_type.lua_name, method.lua_name });
+
+                        var first = true;
+                        for (method.params) |param| {
+                            if (!first)
+                                try all_writer.interface.writeAll(", ");
+
+                            try all_writer.interface.writeAll(param.name);
+
+                            first = false;
+                        }
+
+                        try all_writer.interface.writeAll(") end\n");
+                    },
+                    .function => {
+                        for (method.params) |param| {
+                            try all_writer.interface.print(
+                                \\---{s}
+                                \\---@param {s} {s} {s}
+                                \\
+                            , .{ new_desc, param.name, param.kind, param.desc });
+                        }
+
+                        if (method.returns) |returns| {
+                            try all_writer.interface.print(
+                                \\---@return {s} {s} {s}
+                                \\
+                            , .{ returns.kind, returns.name, returns.desc });
+                        }
+
+                        try all_writer.interface.print(
+                            \\function {s}.{s}(
+                        , .{ lua_type.lua_name, method.lua_name });
+
+                        var first = true;
+                        for (method.params) |param| {
+                            if (!first)
+                                try all_writer.interface.writeAll(", ");
+
+                            try all_writer.interface.writeAll(param.name);
+
+                            first = false;
+                        }
+
+                        try all_writer.interface.writeAll(") end\n");
+                    },
+                    .hidden_function => {
+                        // Hidden functions are un documented.
+                    },
+                }
+            }
+
+            if (check == .setter) {
+                try all_writer.interface.print(
+                    \\{s} = {{}}
+                    \\
+                , .{
+                    lua_type.lua_name,
+                });
             }
         }
-
-        const global_text = try std.fmt.allocPrint(allocator,
-            \\{s} = {{}}
-            \\
-        , .{
-            lua_type.lua_name,
-        });
-        defer allocator.free(global_text);
-        try all_writer.interface.writeAll(global_text);
 
         try all_writer.interface.writeAll("\n");
     }
 
-    {
-        try all_writer.interface.writeAll(
-            \\session = Session
-            \\
-        );
-    }
+    try all_writer.interface.writeAll(@embedFile("lua/defn_extensions.lua"));
 }
