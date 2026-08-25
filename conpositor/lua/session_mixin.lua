@@ -1,8 +1,9 @@
--- Make a table to store tags in
+--- @module 'types.all'
+
 session.tags = {}
 local tags_mt = {
     __index = function(_, index)
-        return session:_get_tag(index)
+        return Session._get_tag(session, index)
     end,
 
     __newindex = function()

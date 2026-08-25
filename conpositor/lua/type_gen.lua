@@ -1,3 +1,5 @@
+--- @module 'types.all'
+
 -- Creates a global type
 _GenerateType = function(functions, methods, getters, setters)
     -- Stores instance fields, this is seperated out so that if a
@@ -18,15 +20,13 @@ _GenerateType = function(functions, methods, getters, setters)
             -- Search for a getter first
             if getters[index] then
                 -- Call it
-                return getters[index](self.instance)
+                return getters[index](self)
             end
 
             -- Now a method
             if methods[index] then
                 -- Wrap with userdata
-                return function(parent, ...)
-                    return methods[index](parent.instance, ...)
-                end
+                return methods[index]
             end
 
             -- now check if the instance has fields created
@@ -46,7 +46,7 @@ _GenerateType = function(functions, methods, getters, setters)
 
             -- Check for a setter
             if setters[index] then
-                setters[index](self.instance, value)
+                setters[index](self, value)
                 return
             end
 

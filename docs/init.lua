@@ -1,13 +1,13 @@
---- @module 'types.all'
-local gaps = require("lib.gaps") --- @class gaps
-local funcs = require("lib.funcs") --- @class funcs
-local mouse = require("lib.mouse") --- @class mouse
+---@module 'types.all'
+local gaps = require("lib.gaps")
+local funcs = require("lib.funcs")
+local mouse = require("lib.mouse")
 
 -- load colorscheme and libraries
 require("mondo.colors")
 
 -- add this first in case of crash
-session:add_bind("AS", "Escape", funcs.quit())
+session:bind("AS", "Escape", funcs.quit())
 
 -- some usefull consts
 local force_debug = false
@@ -24,6 +24,9 @@ mouse.setup {}
 -- create my containers
 local stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
 local tags = { "F1", "F2", "F3", "F4" }
+
+--- @class Tag
+--- @field name string
 
 for tag, name in pairs(tags) do
     session.tags[tag].name = name
@@ -171,55 +174,56 @@ end
 mouse.addBind("resize", mouse_resize)
 mouse.addBind("move", mouse_move)
 
-session:add_mouse_bind(super, "Left", mouse.bind("move"))
-session:add_mouse_bind(super, "Right", mouse.bind("resize"))
+session:mouse_bind(super, "Left", mouse.bind("move"))
+session:mouse_bind(super, "Right", mouse.bind("resize"))
 
 -- programs
-session:add_bind(super, "Return", funcs.spawn(terminal, "--class=termA"))
-session:add_bind(super .. "S", "Return", funcs.spawn(terminal, "--class=termB"))
-session:add_bind(super .. "C", "Return", funcs.spawn(terminal, "--class=termB"))
-session:add_bind(super, "I", funcs.spawn(terminal, "--class=htop", "-e", "htop"))
-session:add_bind(super, "M", funcs.spawn(terminal, "--class=music", "-e", "kew"))
-session:add_bind(super, "R", funcs.spawn(terminal, "--class=filesD", "-e", "ranger"))
-session:add_bind(super .. "S", "R", funcs.spawn(terminal, "--class=filesB", "-e", "ranger"))
-session:add_bind(super, "V", funcs.spawn(terminal, "--class=cava", "-e", "cava"))
+session:bind(super, "Return", funcs.spawn(terminal, "--class=termA"))
+session:bind(super .. "S", "Return", funcs.spawn(terminal, "--class=termB"))
+session:bind(super .. "C", "Return", funcs.spawn(terminal, "--class=termB"))
+session:bind(super, "I", funcs.spawn(terminal, "--class=htop", "-e", "htop"))
+session:bind(super, "M", funcs.spawn(terminal, "--class=music", "-e", "kew"))
+session:bind(super, "R", funcs.spawn(terminal, "--class=filesD", "-e", "ranger"))
+session:bind(super .. "S", "R", funcs.spawn(terminal, "--class=filesB", "-e", "ranger"))
+session:bind(super, "V", funcs.spawn(terminal, "--class=cava", "-e", "cava"))
 
-session:add_bind(super .. "S", "S", funcs.spawn("ss.sh"))
-session:add_bind(super, "W", funcs.spawn("vivaldi", "--ozone-platform=wayland"))
-session:add_bind(super, "A", funcs.spawn("pavucontrol"))
+session:bind(super .. "S", "S", funcs.spawn("ss.sh"))
+session:bind(super, "W", funcs.spawn("vivaldi", "--ozone-platform=wayland"))
+session:bind(super, "A", funcs.spawn("pavucontrol"))
 
 -- launchers
-session:add_bind(super, "D", funcs.spawn("bemenu-launcher"))
-session:add_bind(super .. "S", "D", funcs.spawn("j4-dmenu-desktop", "--dmenu=menu"))
-session:add_bind(super .. "S", "W", funcs.spawn("bwpcontrol", "menu"))
-session:add_bind(super, "T", funcs.spawn("mondocontrol", "menu"))
+session:bind(super, "D", funcs.spawn("bemenu-launcher"))
+session:bind(super .. "S", "D", funcs.spawn("j4-dmenu-desktop", "--dmenu=menu"))
+session:bind(super .. "S", "W", funcs.spawn("bwpcontrol", "menu"))
+session:bind(super, "T", funcs.spawn("mondocontrol", "menu"))
 
 -- misc session mgmt
-session:add_bind(super, "H", funcs.cycle_layout(1, align_cycle))
-session:add_bind(super .. "S", "H", funcs.cycle_layout(1, reverse_cycle))
-session:add_bind(super, "Tab", funcs.cycle_focus(1))
-session:add_bind(super .. "S", "Tab", funcs.cycle_focus(-1))
-session:add_bind(super, "Space", funcs.toggle_floating())
-session:add_bind(super .. "S", "Escape", funcs.quit())
-session:add_bind(super, "Q", funcs.kill_client())
-session:add_bind(super, "F", funcs.toggle_fullscreen())
+session:bind(super, "H", funcs.cycle_layout(1, align_cycle))
+session:bind(super .. "S", "H", funcs.cycle_layout(1, reverse_cycle))
+session:bind(super, "Tab", funcs.cycle_focus(1))
+session:bind(super .. "S", "Tab", funcs.cycle_focus(-1))
+session:bind(super, "Space", funcs.toggle_floating())
+session:bind(super .. "S", "Escape", funcs.quit())
+session:bind(super, "Q", funcs.kill_client())
+session:bind(super, "F", funcs.toggle_fullscreen())
 
 -- tags
 for tag, name in pairs(tags) do
-    session:add_bind(super, name, funcs.set_monitor_tag(tag))
-    session:add_bind(super .. "S", name, funcs.set_client_tag(tag))
+    local new_tag = tag
+    session:bind(super, name, funcs.set_monitor_tag(new_tag))
+    session:bind(super .. "S", name, funcs.set_client_tag(new_tag))
 end
 
 -- stacks
 for _, stack in pairs(stacks) do
-    session:add_bind(super .. "S", "" .. stack, funcs.set_client_stack(stack))
+    session:bind(super .. "S", "" .. stack, funcs.set_client_stack(stack))
 end
 
 -- debug tools
-session:add_bind(super, "P", funcs.reload())
-session:add_bind(super, "G", gaps.increase)
-session:add_bind(super .. "S", "G", gaps.decrease)
-session:add_bind(super .. "S", "V", gaps.toggle)
+session:bind(super, "P", funcs.reload())
+session:bind(super, "G", gaps.increase)
+session:bind(super .. "S", "G", gaps.decrease)
+session:bind(super .. "S", "V", gaps.toggle)
 
 -- title modules
 local icon_module = TextModule.new(function(client)
@@ -279,8 +283,8 @@ session:add_rule({}, function(client)
 end)
 
 -- module switch bind
-session:add_bind(super .. "S", "L", debug_window_set(false))
-session:add_bind(super, "L", debug_window_set(true))
+session:bind(super .. "S", "L", debug_window_set(false))
+session:bind(super, "L", debug_window_set(true))
 
 -- default rule
 session:add_rule({}, function(client)
@@ -339,7 +343,6 @@ session:hook("startup", function(_)
     session:spawn("waybar", {})
     session:spawn("blueman-applet", {})
     session:spawn("nm-applet", {})
-    session:spawn("/usr/lib/gsd-xsettings", {})
 end)
 
 session:hook("add_monitor", function(monitor)
@@ -352,7 +355,6 @@ function reload_colors()
 end
 
 function get_memory()
-    collectgarbage("collect")
     return string.format("%.0fb", 1000 * collectgarbage("count"))
 end
 

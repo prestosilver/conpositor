@@ -5,7 +5,7 @@ local funcs = require("lib.funcs") --- @class funcs
 local mouse = require("lib.mouse") --- @class mouse
 
 -- add an escape first in case of a lua crash
-session:add_bind("AS", "Escape", funcs.quit())
+session:bind("AS", "Escape", funcs.quit())
 
 -- load a colorscheme
 -- TODO: impl
@@ -90,8 +90,9 @@ session:hook("add_monitor", function(monitor)
     monitor:set_layout(default_layout)
 end)
 
--- Setup mouse config
---- @class Client
+--- Setup mouse config
+
+--- @type Client?
 local mouse_client = nil
 local mouse_client_position = {}
 local mouse_floating = false
@@ -155,29 +156,29 @@ session:add_mouse_bind("L", "Left", mouse.bind("move"))
 session:add_mouse_bind("L", "Right", mouse.bind("resize"))
 
 -- programs
-session:add_bind("L", "Return", funcs.spawn("foot"))
+session:bind("L", "Return", funcs.spawn("foot"))
 
 -- Floating
-session:add_bind("L", "Space", funcs.toggle_floating())
-session:add_bind("L", "F", funcs.toggle_fullscreen())
-session:add_bind("L", "Q", funcs.kill_client())
+session:bind("L", "Space", funcs.toggle_floating())
+session:bind("L", "F", funcs.toggle_fullscreen())
+session:bind("L", "Q", funcs.kill_client())
 
 -- tags
 for tag, name in pairs(tags) do
-    session:add_bind(super, name, funcs.set_monitor_tag(tag))
-    session:add_bind(super .. "S", name, funcs.set_client_tag(tag))
+    session:bind(super, name, funcs.set_monitor_tag(tag))
+    session:bind(super .. "S", name, funcs.set_client_tag(tag))
 end
 
 -- stacks
 for _, stack in pairs(stacks) do
-    session:add_bind(super .. "S", "" .. stack, funcs.set_client_stack(stack))
+    session:bind(super .. "S", "" .. stack, funcs.set_client_stack(stack))
 end
 
 -- debug tools
-session:add_bind("L", "P", funcs.reload())
-session:add_bind("L", "G", gaps.increase)
-session:add_bind("LS", "G", gaps.decrease)
-session:add_bind("LS", "V", gaps.toggle)
+session:bind("L", "P", funcs.reload())
+session:bind("L", "G", gaps.increase)
+session:bind("LS", "G", gaps.decrease)
+session:bind("LS", "V", gaps.toggle)
 
 -- title modules
 local icon_module = TextModule.new(function(client)
@@ -200,8 +201,8 @@ session:add_rule({}, function(client)
 end)
 
 -- module switch bind
-session:add_bind(super .. "S", "L", debug_window_set(false))
-session:add_bind(super, "L", debug_window_set(true))
+session:bind(super .. "S", "L", debug_window_set(false))
+session:bind(super, "L", debug_window_set(true))
 
 -- default rule
 session:add_rule({}, function(client)

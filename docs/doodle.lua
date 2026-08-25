@@ -1,11 +1,9 @@
--- require some builtin libraries
+--- @module 'types.all'
 local gaps = require("lib.gaps") --- @class gaps
 local funcs = require("lib.funcs") --- @class funcs
 local mouse = require("lib.mouse") --- @class mouse
 
 local mondo = require("mondo.colors") --- @class mondo
-
---- @module 'types.all'
 
 -- add this first in case of crash
 session:add_bind("AS", "Escape", funcs.quit())
@@ -16,6 +14,8 @@ local ab_split = 0.7
 local ac_split = 0.2
 local bd_split = 0.4
 
+local force_debug = false
+
 -- add this first in case of crash
 session:bind("AS", "Escape", funcs.quit())
 
@@ -24,7 +24,7 @@ gaps.setup { inc = 4, toggle = true, value = 4, ratio = 2, outer = 20 }
 mouse.setup {}
 
 -- set my super key
-local super = force_debug or session.is_debug() and "A" or "L"
+local super = force_debug or session.debug and "A" or "L"
 
 -- create my containers
 local stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
