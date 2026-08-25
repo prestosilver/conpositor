@@ -11,16 +11,11 @@ x: f64,
 y: f64,
 
 pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !Self {
-    const top = lua.getTop();
-    defer lua.setTop(top);
-
-    lua.pushValue(index);
-
-    _ = lua.getField(-1, "x");
+    _ = lua.getField(index, "x");
     const x = lua.toNumber(f64, -1) catch 0;
     lua.pop(1);
 
-    _ = lua.getField(-1, "y");
+    _ = lua.getField(index, "y");
     const y = lua.toNumber(f64, -1) catch 0;
     lua.pop(1);
 

@@ -39,10 +39,19 @@ pub const RunResult = struct {
 };
 
 pub const LuaType = struct {
+    const LuaParam = struct {
+        name: []const u8 = "",
+        kind: []const u8 = "",
+        desc: []const u8 = "",
+    };
+
     const LuaMethod = struct {
         impl_name: []const u8,
         lua_name: [:0]const u8,
         description: []const u8,
+
+        params: []const LuaParam = &.{},
+        returns: ?LuaParam = null,
 
         binding_mode: enum { raw, auto },
         kind: enum { function, method, getter, setter, hidden_function } = .method,
@@ -135,14 +144,12 @@ pub const LuaType = struct {
             }
 
             pub fn toString(tmp_lua: *Lua) !c_int {
-                _ = tmp_lua.getField(-1, "instance");
                 const a = try tmp_lua.toAny(*self.impl, -1);
 
                 // panics on out of memory
                 const pushes = try std.fmt.allocPrint(allocator, "{f}", .{a});
                 defer allocator.free(pushes);
 
-                tmp_lua.pop(1);
                 tmp_lua.pop(1);
 
                 _ = tmp_lua.pushString(pushes);
@@ -183,6 +190,11 @@ pub const LUA_TYPES = [_]LuaType{
                 .lua_name = "new",
                 .description = "Creates a new text module",
 
+                .params = &.{
+                    .{ .name = "text", .kind = "fun(base: any):string", .desc = "The callback used to get the modules text" },
+                },
+                .returns = .{ .name = "module", .kind = "TextModule", .desc = "A new text module" },
+
                 .binding_mode = .auto,
                 .kind = .function,
             },
@@ -200,6 +212,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .lua_name = "position",
                 .description = "Gets the clients position",
 
+                .returns = .{ .kind = "Vector2" },
+
                 .binding_mode = .auto,
                 .kind = .getter,
             },
@@ -207,6 +221,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .impl_name = "setPosition",
                 .lua_name = "position",
                 .description = "Sets the clients position",
+
+                .returns = .{ .kind = "Vector2" },
 
                 .binding_mode = .auto,
                 .kind = .setter,
@@ -216,6 +232,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .lua_name = "fullscreen",
                 .description = "Gets the fullscreen state of the client",
 
+                .returns = .{ .kind = "boolean" },
+
                 .binding_mode = .auto,
                 .kind = .getter,
             },
@@ -223,6 +241,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .impl_name = "setFullscreen",
                 .lua_name = "fullscreen",
                 .description = "Sets the fullscreen state of the client",
+
+                .returns = .{ .kind = "boolean" },
 
                 .binding_mode = .auto,
                 .kind = .setter,
@@ -232,6 +252,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .lua_name = "border",
                 .description = "Sets the border width of the client",
 
+                .returns = .{ .kind = "number" },
+
                 .binding_mode = .auto,
                 .kind = .setter,
             },
@@ -239,6 +261,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .impl_name = "getAppid",
                 .lua_name = "appid",
                 .description = "Gets the clients appid",
+
+                .returns = .{ .kind = "string" },
 
                 .binding_mode = .auto,
                 .kind = .getter,
@@ -248,6 +272,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .lua_name = "title",
                 .description = "Gets the clients title",
 
+                .returns = .{ .kind = "string" },
+
                 .binding_mode = .auto,
                 .kind = .getter,
             },
@@ -255,6 +281,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .impl_name = "setTag",
                 .lua_name = "tag",
                 .description = "Sets the clients tag",
+
+                .returns = .{ .kind = "Tag" },
 
                 .binding_mode = .auto,
                 .kind = .setter,
@@ -264,6 +292,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .lua_name = "monitor",
                 .description = "Sets the clients monitor",
 
+                .returns = .{ .kind = "Monitor" },
+
                 .binding_mode = .auto,
                 .kind = .setter,
             },
@@ -271,6 +301,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .impl_name = "getStack",
                 .lua_name = "stack",
                 .description = "Gets the clients stack",
+
+                .returns = .{ .kind = "Stack" },
 
                 .binding_mode = .auto,
                 .kind = .getter,
@@ -303,6 +335,8 @@ pub const LUA_TYPES = [_]LuaType{
                 .impl_name = "getFloating",
                 .lua_name = "floating",
                 .description = "Gets the clients floating state",
+
+                .returns = .{ .kind = "boolean" },
 
                 .binding_mode = .auto,
                 .kind = .getter,
@@ -437,10 +471,10 @@ pub const LUA_TYPES = [_]LuaType{
             .{
                 .impl_name = "getActiveMonitor",
                 .lua_name = "active_monitor",
-                .description =
-                \\@return Monitor 
-                \\Returns the current active monitor
-                ,
+                .description = "Gets the active monitor",
+
+                .params = &.{},
+                .returns = .{ .name = "monitor", .kind = "Monitor", .desc = "The active monitor" },
 
                 .binding_mode = .auto,
             },
@@ -449,12 +483,21 @@ pub const LUA_TYPES = [_]LuaType{
                 .lua_name = "cycle_focus",
                 .description = "Cycles the current stack",
 
+                .params = &.{
+                    .{ .name = "dir", .kind = "-1|1", .desc = "The direction to cycle" },
+                },
+
                 .binding_mode = .auto,
             },
             .{
                 .impl_name = "spawn",
                 .lua_name = "spawn",
                 .description = "Spawns a child process",
+
+                .params = &.{
+                    .{ .name = "command", .kind = "string", .desc = "The command to spawn" },
+                    .{ .name = "...", .kind = "string", .desc = "The parameters for the command" },
+                },
 
                 .binding_mode = .auto,
             },
@@ -463,12 +506,22 @@ pub const LUA_TYPES = [_]LuaType{
                 .lua_name = "set_font",
                 .description = "Sets the sessions font",
 
+                .params = &.{
+                    .{ .name = "face", .kind = "string", .desc = "The font face to use" },
+                    .{ .name = "size", .kind = "number", .desc = "The size to set" },
+                },
+
                 .binding_mode = .auto,
             },
             .{
                 .impl_name = "newLayout",
                 .lua_name = "new_layout",
                 .description = "Creates a new layout",
+
+                .params = &.{
+                    .{ .name = "name", .kind = "string", .desc = "The name of the new layout" },
+                },
+                .returns = .{ .name = "layout", .kind = "Layout", .desc = "The created layout" },
 
                 .binding_mode = .auto,
             },
@@ -481,15 +534,27 @@ pub const LUA_TYPES = [_]LuaType{
             },
             .{
                 .impl_name = "addBind",
-                .lua_name = "add_bind",
+                .lua_name = "bind",
                 .description = "Adds a key bind",
+
+                .params = &.{
+                    .{ .name = "modifiers", .kind = "string", .desc = "The mod keys in the bind" },
+                    .{ .name = "key", .kind = "string", .desc = "The key to be bound" },
+                    .{ .name = "callback", .kind = "fun()", .desc = "The callback to run" },
+                },
 
                 .binding_mode = .raw,
             },
             .{
                 .impl_name = "addMouseBind",
-                .lua_name = "add_mouse_bind",
+                .lua_name = "mouse_bind",
                 .description = "Adds a mouse bind",
+
+                .params = &.{
+                    .{ .name = "modifiers", .kind = "string", .desc = "The mod keys in the bind" },
+                    .{ .name = "button", .kind = "string", .desc = "The button to be bound" },
+                    .{ .name = "callback", .kind = "fun(client: Client, position: Vector2)", .desc = "The callback to run" },
+                },
 
                 .binding_mode = .raw,
             },
@@ -497,6 +562,11 @@ pub const LUA_TYPES = [_]LuaType{
                 .impl_name = "addRule",
                 .lua_name = "add_rule",
                 .description = "Adds a client rule",
+
+                .params = &.{
+                    .{ .name = "traits", .kind = "any", .desc = "The required client traits" },
+                    .{ .name = "callback", .kind = "fun(client:Client)", .desc = "The callback to run" },
+                },
 
                 .binding_mode = .raw,
             },
@@ -567,14 +637,8 @@ session: LuaSession,
 // Used to push an instance onto the stack
 // TODO: break out the impl into a function in type_gen.lua
 pub fn pushT(lua: *Lua, self: anytype, name: [:0]const u8) void {
-    lua.newTable();
-
     const instance = lua.newUserdata(@TypeOf(self), 0);
     instance.* = self;
-    lua.setField(-2, "instance");
-
-    lua.newTable();
-    lua.setField(-2, "fields");
 
     _ = lua.getGlobal(name);
     lua.setMetatable(-2);
@@ -714,13 +778,7 @@ pub fn init(self: *Self, path: []const u8) Error!void {
     inline for (LUA_TYPES) |lua_type|
         try lua_type.addTo(self.lua);
 
-    self.lua.newTable();
-
     self.lua.pushLightUserdata(&self.session);
-    self.lua.setField(-2, "instance");
-
-    self.lua.newTable();
-    self.lua.setField(-2, "fields");
 
     _ = self.lua.getGlobal("Session");
     self.lua.setMetatable(-2);

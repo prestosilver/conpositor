@@ -21,9 +21,7 @@ pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !Self {
         const value = lua.toNumber(index) catch 0;
         result.id = std.math.lossyCast(u8, value);
     } else {
-        _ = lua.getField(index, "instance");
-        result = (try lua.toUserdata(Self, -1)).*;
-        lua.pop(1);
+        result = (try lua.toUserdata(Self, index)).*;
     }
 
     return result;
