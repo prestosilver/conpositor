@@ -664,7 +664,7 @@ pub fn updateMons(self: *Session) !void {
             var iter = self.clients.iterator(.forward);
             while (iter.next()) |client| {
                 if (client.monitor == null and client.isMapped()) {
-                    client.setMonitor(selected);
+                    try client.setMonitor(selected);
                 }
             }
 

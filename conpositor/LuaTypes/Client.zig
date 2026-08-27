@@ -84,8 +84,8 @@ pub fn setTag(self: *Self, tag: LuaTag) void {
     self.child.setTag(tag.id);
 }
 
-pub fn setMonitor(self: *Self, monitor: LuaMonitor) void {
-    self.child.setMonitor(monitor.child);
+pub fn setMonitor(self: *Self, monitor: LuaMonitor) !void {
+    try self.child.setMonitor(monitor.child);
 }
 
 pub fn getStack(self: *Self) ?LuaStack {

@@ -177,7 +177,7 @@ pub fn close(self: *Monitor) !void {
                 .height = client.floating_bounds.height,
             });
 
-            client.setMonitor(new_mon);
+            try client.setMonitor(new_mon);
         }
     }
     if (new_mon.getFocusedClient()) |focus|
@@ -374,7 +374,7 @@ fn updateTabs(self: *Monitor) !void {
     }
 }
 
-fn updateLayout(self: *Monitor) !void {
+pub fn updateLayout(self: *Monitor) !void {
     defer self.dirty.layout = false;
     defer self.dirty.force_layout = false;
 

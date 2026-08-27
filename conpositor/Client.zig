@@ -252,6 +252,14 @@ pub fn getInnerBounds(self: *Client) wlr.Box {
     const title_height = self.session.config.getTitleHeight();
     const bounds = self.getBounds();
 
+    if (self.fullscreen)
+        return .{
+            .x = 0,
+            .y = 0,
+            .width = bounds.width,
+            .height = bounds.height,
+        };
+
     return switch (self.getFrameKind()) {
         .hide => .{
             .x = 0,
@@ -308,8 +316,9 @@ pub fn setVisible(self: *Client, visible: bool) void {
 }
 
 pub fn setFloatingSize(self: *Client, in_target_bounds: wlr.Box) void {
+    self.floating_bounds = self.applyBounds(in_target_bounds, false);
+
     if (self.floating) {
-        self.floating_bounds = self.applyBounds(in_target_bounds, false);
         self.dirty.size = true;
     }
 }
@@ -448,7 +457,20 @@ pub fn isStopped(self: *Client) bool {
     return switch (self.surface) {
         .X11 => false,
         .XDG => {
-            std.log.warn("TODO: check client stopped", .{});
+            var info: std.os.linux.CLD = undefined;
+
+            const creds = self.surface.XDG.client.client.getCredentials();
+            if (std.c.waitpid(creds.pid, @ptrCast(&info), std.c.W.NOHANG | std.c.W.CONTINUED | std.c.W.STOPPED | std.c.W.NOWAIT) < 0) {
+                if (std.posix.errno(-1) == .CHILD)
+                    return true;
+            } else {
+                if (info == .STOPPED or info == .TRAPPED)
+                    return true;
+
+                if (info == .CONTINUED)
+                    return false;
+            }
+
             return false;
         },
     };
@@ -484,7 +506,7 @@ pub fn close(self: *Client) void {
     }
 }
 
-pub fn setMonitor(self: *Client, target_monitor: *Monitor) void {
+pub fn setMonitor(self: *Client, target_monitor: *Monitor) !void {
     const old_monitor = self.monitor;
 
     if (old_monitor == target_monitor)
@@ -519,6 +541,9 @@ pub fn setMonitor(self: *Client, target_monitor: *Monitor) void {
     self.setFullscreen(self.fullscreen);
 
     target_monitor.dirty.layout = true;
+    try target_monitor.updateLayout();
+    if (old_monitor) |old|
+        try old.updateLayout();
 }
 
 pub fn getFrameKind(self: *Client) FrameKind {
@@ -847,6 +872,11 @@ pub fn map(self: *Client) !void {
     self.scene.node.setEnabled(false);
     self.scene_surface.node.setEnabled(true);
 
+    self.frame = try .init(self.session.config.getColor(false, .border), self);
+
+    self.session.clients.append(self);
+    self.session.focus_clients.append(self);
+
     var geom: wlr.Box =
         switch (self.surface) {
             .XDG => |xdg| xdg.geometry,
@@ -858,28 +888,19 @@ pub fn map(self: *Client) !void {
             },
         };
 
-    self.frame = try .init(self.session.config.getColor(false, .border), self);
+    geom = self.applyBounds(geom, true);
 
-    self.session.clients.append(self);
-    self.session.focus_clients.append(self);
+    self.floating_bounds = geom;
+    self.container_bounds = geom;
 
-    if (self.managed) {
-        geom = self.applyBounds(geom, true);
-    }
+    self.setVisible(true);
 
     if (self.managed)
         try self.session.focusClient(self, true)
     else
         self.activateSurface(true);
 
-    self.setFloatingSize(geom);
-    self.setContainerSize(geom);
-    self.setVisible(true);
-
-    if (self.managed)
-        try self.applyRules();
-
-    self.setMonitor(self.session.focusedMonitor orelse
+    try self.setMonitor(self.session.focusedMonitor orelse
         self.session.monitors.first() orelse
         return error.MapToNothing);
 
@@ -1070,15 +1091,18 @@ fn updateSizeSerial(self: *Client) u32 {
 
 pub fn commit(self: *Client, _: *wlr.Surface) !void {
     if (self.surface.XDG.initial_commit) {
+        try self.applyRules();
+
         if (self.surface.XDG.role_data.toplevel) |toplevel|
             _ = toplevel.configure(&.{
                 .fields = .{
+                    .bounds = true,
                     .wm_capabilities = true,
                 },
                 .maximized = false,
                 .fullscreen = false,
                 .resizing = false,
-                .activated = true,
+                .activated = false,
                 .suspended = false,
                 .tiled = .{},
                 .constrained = .{},
@@ -1090,6 +1114,9 @@ pub fn commit(self: *Client, _: *wlr.Surface) !void {
                 },
                 .wm_capabilities = .{ .fullscreen = true },
             });
+
+        if (self.monitor) |m|
+            m.dirty.layout = true;
 
         return;
     }
