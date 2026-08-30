@@ -1,4 +1,7 @@
-# Con-positor
+# Conpositor
+
+> [!WARNING]
+> Conpositor is still unstable, I would not suggest switching to it daily quite yet unless you have a backup window manager in place.
 
 ## Install
 
@@ -7,29 +10,21 @@ To install this just clone the repo and install it using zig build, the dependen
 The full command I use is this:
 `zig build -p /usr -Doptimize=ReleaseFast`
 
-> [!WARNING]
-> Never copy past code from the internet. This command will install files directly to your /usr folder. If you want to inspect it's contents run zig build and look in the `zig-out` folder.
+> [!CAUTION]
+> Never copy-paste code from the internet. This command will install files directly to your /usr folder. If you want to inspect it's contents run zig build and look in the `zig-out` folder.
 
 ## About
 
-Conpositor is a wayland compositor where you dont have to move your windows. I made this because I got sick of manually arranging all my windows in I3. It is different from tiling in one key way. Rather than allowing the user to move windows manually, arrange splits, and layout their windows, conpositor lets them define "containers" in their config. These containers can have different layouts, but can not be moved without redefining them in the config.
+Conpositor is a wayland compositor where you don't have to move your windows. I made this because I got sick of manually arranging all my windows in I3. It is different from tiling in one key way. Rather than allowing the user to move windows manually, arrange splits, and layout their windows, Conpositor lets them define "containers" in their config. These containers can have different layouts, but can not be moved without redefining them in the config.
 
 ## Config
 
-More documentation to come later, for now see [the sample config.](docs/init.lua)
+Conpositor can be configured in lua, for a basic overview of its capabilities see [my personal config](docs/init.lua).
 
 ## Screenshots
 
-We have window frames for every environment you can think of!
+![Conpositor with 5 containers](docs/screenshot1.png)
 
-### Sparse
+## Contributing
 
-![Busy](docs/screenshot3.png)
-
-### Busy
-
-![Kinda busy](docs/screenshot1.png)
-
-### Busy and Dense
-
-![Super Busy and Dense](docs/screenshot2.png)
+Conpositor welcomes any contributions, please read [CONTRIBUTING.md](CONTRIBUTING.md) for more info. An overview of the general project structure can also be found in [ARCHITECTURE.md](ARCHITECTURE.md)

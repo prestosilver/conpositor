@@ -1,31 +1,38 @@
--- require some builtin libraries
-local gaps = require("lib.gaps")
-local funcs = require("lib.funcs")
-local mouse = require("lib.mouse")
+--- @module 'types.all'
+local gaps = require("lib.gaps") --- @class gaps
+local funcs = require("lib.funcs") --- @class funcs
+local mouse = require("lib.mouse") --- @class mouse
 
-local mondo = require("mondo.colors")
+local mondo = require("mondo.colors") --- @class mondo
 
 -- add this first in case of crash
 session:add_bind("AS", "Escape", funcs.quit())
 
--- some usefull consts
-local force_debug = false
 local terminal = "kitty"
 
 local ab_split = 0.7
 local ac_split = 0.2
 local bd_split = 0.4
 
+local force_debug = false
+
+-- add this first in case of crash
+session:bind("AS", "Escape", funcs.quit())
+
 -- setup libraries
-gaps.setup { toggle = true, value = 8, ratio = 2, outer = 30 }
+gaps.setup { inc = 4, toggle = true, value = 4, ratio = 2, outer = 20 }
 mouse.setup {}
 
 -- set my super key
-local super = force_debug or session.is_debug() and "A" or "L"
+local super = force_debug or session.debug and "A" or "L"
 
 -- create my containers
 local stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
-local tags = { f1 = 1, f2 = 2, f3 = 3, f4 = 4 }
+local tags = { "F1", "F2", "F3", "F4" }
+
+for tag, name in pairs(tags) do
+    session.tags[tag].name = name
+end
 
 local function layout(align, reverse)
     local align_id = 0
@@ -78,7 +85,7 @@ end
 
 local align_cycle = { {}, {} }
 local reverse_cycle = { {}, {}, {} }
-local layout_names = {}
+local layouts = {}
 for align_index, align in ipairs { "right", "center", "left" } do
     local align_text
     if align == "right" then align_text = ">" end
@@ -90,17 +97,16 @@ for align_index, align in ipairs { "right", "center", "left" } do
         if reverse == true then brackets = { "]", "[" } end
 
         local layout_index = layout(align, reverse)
+        session.layouts[layout_index].name = brackets[1] .. " " .. align_text .. " " .. brackets[2]
 
-        layout_names[layout_index] = brackets[1] .. " " .. align_text .. " " .. brackets[2]
+        local aligned_ab_split = ab_split
+        if align == "center" then aligned_ab_split = 0.5 end
+        if align == "left" then aligned_ab_split = 1.0 - ab_split end
 
-        local ab_split = ab_split
-        if align == "center" then ab_split = 0.5 end
-        if align == "left" then ab_split = 1.0 - ab_split end
+        setup_abcd(session.layouts[layout_index].root, aligned_ab_split, ac_split, bd_split, reverse)
 
-        setup_abcd(layout_index, ab_split, ac_split, bd_split, reverse)
-
-        align_cycle[reverse_index][align_index] = layout(align, reverse)
-        reverse_cycle[align_index][reverse_index] = layout(align, reverse)
+        align_cycle[reverse_index][align_index] = session.layouts[layout_index]
+        reverse_cycle[align_index][reverse_index] = session.layouts[layout_index]
     end
 end
 
@@ -205,9 +211,7 @@ local function debug_window_set(value)
 
     return function()
         local client = session:active_client()
-        if client then
-            client.modules = modules
-        end
+        if client then client.modules = modules end
     end
 end
 
@@ -217,33 +221,40 @@ time_module.text = function(monitor)
     return "TIME O CLOCK"
 end
 
-local layout_module = {}
-layout_module.text = function(monitor)
-    return layout_names[session:get_active_monitor().layout]
+local active_layout_module = {}
+active_layout_module.palette = mondo.inactive
+active_layout_module.text = function(monitor)
+    return monitor.layout.name
+end
+
+local active_tag_module = {}
+active_tag_module.text = function(monitor)
+    return monitor.layout.name
+end
+
+local active_client_icon_module = {}
+active_client_icon_module.text = function(monitor)
+    local client = monitor:active_client()
+
+    if client then return client.icon end
+    return "󰍹"
 end
 
 local active_client_module = {}
 active_client_module.palette = mondo.inactive
 active_client_module.text = function(monitor)
-    local client = monitor:get_active_client()
-    if client then
-        return client.title .. client.icon
-    else
-        return "Desktop"
-    end
-end
+    local client = monitor:active_client()
 
-local active_tag_module = {}
-active_tag_module.text = function(monitor)
-    return "F" .. session:get_active_monitor().tag
+    if client then return client.title end
+    return "Desktop"
 end
 
 local default_bars = {
     top = {
         palette = mondo.active,
 
-        left = { layout_module, tag_module, },
-        center = { active_client_module },
+        left = { active_layout_module, tag_module, },
+        center = { active_client_icon_module, active_client_module },
         right = { time_module }
     }
 }
@@ -252,85 +263,73 @@ local default_bars = {
 local mouse_resize_action = mouse.create_bind(mouse_resize)
 local mouse_move_action = mouse.create_bind(mouse_move)
 
-session:add_mouse("client", super, "Left", mouse_move_action)
-session:add_mouse("client", super, "Right", mouse_resize_action)
+session:mouse("client", super, "Left", mouse_move_action)
+session:mouse("client_frame", "", "Left", mouse_move_action)
 
-session:add_mouse("client_frame", "", "Left", mouse_move_action)
-session:add_mouse("client_frame", "", "Right", mouse_resize_action)
+session:mouse("client", super, "Right", mouse_resize_action)
+session:mouse("client_frame", "", "Right", mouse_resize_action)
 
 -- programs
-session:add_bind(super, "Return", funcs.spawn(terminal, "--class=termA"))
-session:add_bind(super .. "S", "Return", funcs.spawn(terminal, "--class=termB"))
-session:add_bind(super .. "C", "Return", funcs.spawn(terminal, "--class=termB"))
-session:add_bind(super, "I", funcs.spawn(terminal, "--class=htop", "-e", "htop"))
-session:add_bind(super, "M", funcs.spawn(terminal, "--class=music", "-e", "kew"))
-session:add_bind(super, "R", funcs.spawn(terminal, "--class=filesD", "-e", "ranger"))
-session:add_bind(super .. "S", "R", funcs.spawn(terminal, "--class=filesB", "-e", "ranger"))
-session:add_bind(super, "V", funcs.spawn(terminal, "--class=cava", "-e", "cava"))
+session:bind(super, "Return", funcs.spawn(terminal, "--class=termA"))
+session:bind(super .. "S", "Return", funcs.spawn(terminal, "--class=termB"))
+session:bind(super .. "C", "Return", funcs.spawn(terminal, "--class=termB"))
+session:bind(super, "I", funcs.spawn(terminal, "--class=htop", "-e", "htop"))
+session:bind(super, "M", funcs.spawn(terminal, "--class=music", "-e", "kew"))
+session:bind(super, "R", funcs.spawn(terminal, "--class=filesD", "-e", "ranger"))
+session:bind(super .. "S", "R", funcs.spawn(terminal, "--class=filesB", "-e", "ranger"))
+session:bind(super, "V", funcs.spawn(terminal, "--class=cava", "-e", "cava"))
 
-session:add_bind(super .. "S", "S", funcs.spawn("ss.sh"))
-session:add_bind(super, "W", funcs.spawn("vivaldi", "--ozone-platform=wayland"))
-session:add_bind(super, "A", funcs.spawn("pavucontrol"))
+session:bind(super .. "S", "S", funcs.spawn("ss.sh"))
+session:bind(super, "W", funcs.spawn("vivaldi", "--ozone-platform=wayland"))
+session:bind(super, "A", funcs.spawn("pavucontrol"))
 
 -- launchers
-session:add_bind(super, "D", funcs.spawn("bemenu-launcher"))
-session:add_bind(super .. "S", "D", funcs.spawn("j4-dmenu-desktop", "--dmenu=menu"))
-session:add_bind(super .. "S", "W", funcs.spawn("bwpcontrol", "menu"))
-session:add_bind(super, "T", funcs.spawn("mondocontrol", "menu"))
+session:bind(super, "D", funcs.spawn("bemenu-launcher"))
+session:bind(super .. "S", "D", funcs.spawn("j4-dmenu-desktop", "--dmenu=menu"))
+session:bind(super .. "S", "W", funcs.spawn("bwpcontrol", "menu"))
+session:bind(super, "T", funcs.spawn("mondocontrol", "menu"))
 
 -- misc session mgmt
-session:add_bind(super, "H", funcs.cycle_layout(1, align_cycle))
-session:add_bind(super .. "S", "H", funcs.cycle_layout(1, reverse_cycle))
-session:add_bind(super, "Tab", funcs.cycle_focus(1))
-session:add_bind(super .. "S", "Tab", funcs.cycle_focus(-1))
-session:add_bind(super, "Space", funcs.toggle_floating())
-session:add_bind(super .. "S", "Escape", funcs.quit())
-session:add_bind(super, "Q", funcs.kill_client())
-session:add_bind(super, "F", funcs.toggle_fullscreen())
+session:bind(super, "H", funcs.cycle_layout(1, align_cycle))
+session:bind(super .. "S", "H", funcs.cycle_layout(1, reverse_cycle))
+session:bind(super, "Tab", funcs.cycle_focus(1))
+session:bind(super .. "S", "Tab", funcs.cycle_focus(-1))
+session:bind(super, "Space", funcs.toggle_floating())
+session:bind(super .. "S", "Escape", funcs.quit())
+session:bind(super, "Q", funcs.kill_client())
+session:bind(super, "F", funcs.toggle_fullscreen())
 
 -- tags
 for name, tag in pairs(tags) do
-    session:add_bind(super, "F" .. tag, funcs.set_monitor_tag(tag))
-    session:add_bind(super .. "S", "F" .. tag, funcs.set_client_tag(tag))
+    session:bind(super, "F" .. tag, funcs.set_monitor_tag(tag))
+    session:bind(super .. "S", "F" .. tag, funcs.set_client_tag(tag))
 end
 
 -- stacks
 for name, stack in pairs(stacks) do
-    session:add_bind(super .. "S", "" .. stack, funcs.set_client_stack(stack))
+    session:bind(super .. "S", "" .. stack, funcs.set_client_stack(stack))
 end
 
 -- debug tools
-session:add_bind(super, "P", funcs.reload())
-session:add_bind(super, "G", gaps.increase(2))
-session:add_bind(super .. "S", "G", gaps.decrease(2))
-session:add_bind(super .. "S", "V", gaps.toggle())
+session:bind(super, "P", funcs.reload())
+session:bind(super, "G", gaps.increase(2))
+session:bind(super .. "S", "G", gaps.decrease(2))
+session:bind(super .. "S", "V", gaps.toggle())
 
 -- module switch bind
-session:add_bind(super .. "S", "L", debug_window_set(false))
-session:add_bind(super, "L", debug_window_set(true))
-
--- default rule
-session:add_rule({}, function(client)
-    client.modules = default_modules
-    client.stack = stacks.c
-    client.floating = true
-    client.icon = "?"
-    client.border = 3
-    client.palette["active"] = mondo.active
-    client.palette["inactive"] = mondo.inactive
-end)
+session:bind(super .. "S", "L", debug_window_set(false))
+session:bind(super, "L", debug_window_set(true))
 
 -- More specific rules
-local function client_rule(filter, rule)
-    local filter = filter
-    local rule = rule
+local client_rule = function(in_filter, in_rule)
+    local filter = in_filter
+    local rule = in_rule
     session:add_rule(filter, function(client)
-        client.floating = rule.stack == nil
-        if rule.stack then client.stack = rule.stack end
-        if rule.icon then client.icon = rule.icon end
-        if rule.title then client.label = rule.title end
-        if rule.border then client.border = rule.border end
-        if rule.module then client.modules = rule.module end
+        if rule.stack then client.floating = false end
+
+        for key, value in pairs(rule) do
+            client[key] = value
+        end
     end)
 end
 
@@ -341,7 +340,7 @@ client_rule({ appid = "termF" }, { icon = "" })
 client_rule({ appid = "filesB" }, { stack = stacks.b, icon = "", title = "Files" })
 client_rule({ appid = "filesD" }, { stack = stacks.d, icon = "", title = "Files" })
 client_rule({ appid = "music" }, { stack = stacks.d, icon = "", title = "Music" })
-client_rule({ appid = "discord" }, { stack = stacks.c, icon = "Discord", title = "Chat" })
+client_rule({ appid = "discord" }, { stack = stacks.c, icon = "DC", title = "Chat" })
 client_rule({ appid = "htop" }, { stack = stacks.c, icon = "", title = "Tasks" })
 client_rule({ appid = "Sxiv" }, { stack = stacks.b, icon = "", title = "Image" })
 client_rule({ appid = "imv" }, { stack = stacks.b, icon = "", title = "Image" })
@@ -369,9 +368,19 @@ session:add_hooks {
         session:spawn("/usr/lib/gsd-xsettings")
     end
 
-    add_monitor = function(monitor)
+    new_monitor = function(monitor)
         monitor.layout = default_layout
         monitor.bars = default_bars
+    end
+
+    new_client = function(client)
+        client.modules = default_modules
+        client.stack = stacks.c
+        client.floating = true
+        client.icon = "?"
+        client.border = 3
+        client.palette["active"] = mondo.active
+        client.palette["inactive"] = mondo.inactive
     end
 }
 

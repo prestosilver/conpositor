@@ -32,8 +32,11 @@ pub const Error = error{
 pub const Event = enum { startup, add_monitor, mouse_move, mouse_release };
 
 pub const MouseBindData = struct {
+    pub const Target = enum { client, frame, shadow };
+
     mods: wlr.Keyboard.ModifierMask,
     button: u32,
+    target: Target,
 
     pub fn format(self: MouseBindData, writer: *std.Io.Writer) !void {
         if (self.mods.shift) try writer.writeAll("s+");
@@ -41,7 +44,7 @@ pub const MouseBindData = struct {
         if (self.mods.alt) try writer.writeAll("a+");
         if (self.mods.logo) try writer.writeAll("l+");
 
-        try writer.print("{}", .{self.button});
+        try writer.print("{}({s})", .{ self.button, @tagName(self.target) });
     }
 };
 
@@ -101,6 +104,10 @@ pub fn quit(self: *Self) !void {
     self.session.quit();
 }
 
+pub fn getTag(_: *Self, index: u8) ?LuaTag {
+    return .{ .id = index - 1 };
+}
+
 pub fn getActiveClient(self: *Self) ?LuaClient {
     return .{
         .child = self.session.focusedClient() orelse return null,
@@ -127,8 +134,10 @@ fn spawnThread(self: *Self, name: [:0]const u8, args: [][*:0]const u8) void {
     const argv = allocator.alloc([]const u8, args.len + 1) catch unreachable;
 
     argv[0] = @ptrCast(name);
-    for (args, argv[1..]) |in, *out| {
-        out.* = std.mem.span(in);
+    if (args.len > 0) {
+        for (args, argv[1..]) |in, *out| {
+            out.* = std.mem.span(in);
+        }
     }
 
     const child = std.process.spawn(self.session.io, .{
@@ -186,16 +195,6 @@ pub fn newLayout(self: *Self, name: []const u8) !LuaLayout {
     try self.layouts.append(layout);
 
     return .{ .child = layout };
-}
-
-// TODO: Convert to indexes instead of name, that way the names will be lua defined.
-pub fn newTag(self: *Self, name: [:0]const u8) !LuaTag {
-    const name_dup = try allocator.dupeZ(u8, name);
-    try self.tags.append(name_dup);
-
-    std.log.debug("Create session tag {s}", .{name_dup});
-
-    return .{ .id = @intCast(self.tags.items.len - 1) };
 }
 
 pub fn setColor(self: *Self, active: bool, palette_name: []const u8, color_name: []const u8) !void {
@@ -278,11 +277,19 @@ pub fn addBind(lua: *Lua) !i32 {
 pub fn addMouseBind(lua: *Lua) !i32 {
     const old_top = lua.getTop();
 
-    const self = lua.toAny(*Self, -4) catch lua.raiseErrorStr("Not a Session", .{});
+    const self = lua.toAny(*Self, -5) catch lua.raiseErrorStr("Not a Session", .{});
+    const target_name = lua.toString(-4) catch lua.raiseErrorStr("Target not a string", .{});
     const mod_names = lua.toString(-3) catch lua.raiseErrorStr("Mods not a string", .{});
     const key_name = lua.toString(-2) catch lua.raiseErrorStr("Button not a string", .{});
     const calls = lua.toAny(LuaClosure, -1) catch lua.raiseErrorStr("Not a closure", .{});
     errdefer calls.deinit();
+
+    const target: MouseBindData.Target = if (std.mem.eql(u8, target_name, "client"))
+        .client
+    else if (std.mem.eql(u8, target_name, "frame"))
+        .frame
+    else
+        lua.raiseErrorStr("target {s} invalid", .{});
 
     var mods: wlr.Keyboard.ModifierMask = .{};
 
@@ -303,15 +310,16 @@ pub fn addMouseBind(lua: *Lua) !i32 {
     else
         return error.InvalidMouseButton;
 
-    const key: MouseBindData = .{
+    const mouse: MouseBindData = .{
         .button = button,
         .mods = mods,
+        .target = target,
     };
 
-    if (try self.mouse_binds.fetchPut(key, calls)) |value|
+    if (try self.mouse_binds.fetchPut(mouse, calls)) |value|
         value.value.deinit();
 
-    std.log.debug("Set mouse bind for {f}", .{key});
+    std.log.debug("Set mouse bind for {f}", .{mouse});
 
     if (old_top != lua.getTop() + 0)
         return error.LuaError;

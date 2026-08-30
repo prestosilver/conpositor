@@ -31,7 +31,7 @@ pub fn getActiveTag(self: *Self) !LuaTag {
     return .{ .id = self.child.tag };
 }
 
-pub fn setActiveTag(self: *Self, tag: *LuaTag) void {
+pub fn setActiveTag(self: *Self, tag: LuaTag) void {
     self.child.setActiveTag(tag.id);
 
     std.log.debug("Set monitor {f} tag to {f}", .{ self, tag });
@@ -62,9 +62,7 @@ pub fn format(self: Self, writer: *std.Io.Writer) !void {
 }
 
 pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !Self {
-    _ = lua.getField(index, "instance");
-    const result = try lua.toUserdata(Self, -1);
-    lua.pop(1);
+    const result = try lua.toUserdata(Self, index);
 
     return result.*;
 }

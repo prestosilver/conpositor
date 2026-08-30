@@ -1,7 +1,11 @@
+// The monitor object is primarily an abstraction over wayland outputs,
+// it also maintains storing what portion of layouts is dirty.
+//
+// NOTES:
+const conpositor = @import("wayland").server.conpositor;
 const wl = @import("wayland").server.wl;
 const wlr = @import("wlroots");
 const std = @import("std");
-const conpositor = @import("wayland").server.conpositor;
 
 const IpcManager = @import("IpcManager.zig");
 const LayerSurface = @import("LayerSurface.zig");
@@ -10,27 +14,56 @@ const Session = @import("Session.zig");
 const Client = @import("Client.zig");
 const Layout = @import("Layout.zig");
 
+const trace = @import("trace.zig");
+
 const Monitor = @This();
 
 const allocator = Config.allocator;
 
 const TOTAL_LAYERS = 4;
+
+// Layers that render above clients
 const LAYERS_ABOVE_SHELL = [_]u32{ 3, 2 };
 
+// A ref to the parent session, useful for quick access
 session: *Session,
+
+// The next monitor
+link: wl.list.Link = undefined,
+
+// The associated object
 output: *wlr.Output,
 scene_output: *wlr.SceneOutput,
+
+// Used to clear the background when a window is fullscreen, but doesnt fill
 fullscreen_bg: *wlr.SceneRect,
-window: wlr.Box,
+
+// The resolution and position of the monitor
 mode: wlr.Box,
+
+// the working bounds of the monitor
+window: wlr.Box,
+
+// Layer surface lists
 layers: [TOTAL_LAYERS]wl.list.Head(LayerSurface, .link) = undefined,
+
+// What tag is active on the monitor
 tag: u8 = 0,
+
+// The monitors active layout.
 layout: ?*Layout = null,
-link: wl.list.Link = undefined,
+
+// Gaps values
+// inner gaps are window-window boundries
+// outer gaps are window-margin boundries
 gaps_inner: i32 = 0,
 gaps_outer: i32 = 0,
 
+// TODO: Is this really optimal?
+// used to calculate if the monitor is now dirty
 last_usage: [256]bool = .{false} ** 256,
+
+// TODO: Is this nessesary
 last_frame: std.posix.timespec = .{ .sec = 0, .nsec = 0 },
 
 dirty: packed struct {
@@ -40,38 +73,9 @@ dirty: packed struct {
     focus: bool = false,
 } = .{},
 
-events: Events = .{},
-
-const Events = struct {
-    frame_event: wl.Listener(*wlr.Output) = .init(Events.frame),
-    deinit_event: wl.Listener(*wlr.Output) = .init(Events.deinit),
-    present_event: wl.Listener(*wlr.Output.event.Present) = .init(Events.present),
-
-    fn present(listener: *wl.Listener(*wlr.Output.event.Present), _: *wlr.Output.event.Present) void {
-        const events: *Monitor.Events = @fieldParentPtr("present_event", listener);
-        const self: *Monitor = @fieldParentPtr("events", events);
-
-        self.present() catch |ex| {
-            @panic(@errorName(ex));
-        };
-    }
-
-    fn frame(listener: *wl.Listener(*wlr.Output), _: *wlr.Output) void {
-        const events: *Monitor.Events = @fieldParentPtr("frame_event", listener);
-        const self: *Monitor = @fieldParentPtr("events", events);
-
-        self.frame() catch |ex| {
-            @panic(@errorName(ex));
-        };
-    }
-
-    fn deinit(listener: *wl.Listener(*wlr.Output), _: *wlr.Output) void {
-        const events: *Monitor.Events = @fieldParentPtr("deinit_event", listener);
-        const self: *Monitor = @fieldParentPtr("events", events);
-
-        self.deinit();
-    }
-};
+deinit_event: trace.Event(*wlr.Output, "deinit", Monitor) = .{},
+frame_event: trace.Event(*wlr.Output, "frame", Monitor) = .{},
+present_event: trace.Event(*wlr.Output.event.Present, "present", Monitor) = .{},
 
 pub fn init(session: *Session, output: *wlr.Output) !void {
     if (!output.initRender(session.wlr_allocator, session.renderer))
@@ -132,12 +136,13 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
         .mode = std.mem.zeroes(wlr.Box),
         .window = std.mem.zeroes(wlr.Box),
     };
+
     for (&result.layers) |*layer|
         layer.init();
 
-    output.events.frame.add(&result.events.frame_event);
-    output.events.present.add(&result.events.present_event);
-    output.events.destroy.add(&result.events.deinit_event);
+    output.events.frame.add(&result.frame_event.event);
+    output.events.present.add(&result.present_event.event);
+    output.events.destroy.add(&result.deinit_event.event);
 
     const layout_output = try session.output_layout.add(result.output, result.mode.x, result.mode.y);
 
@@ -147,6 +152,7 @@ pub fn init(session: *Session, output: *wlr.Output) !void {
 
     try session.updateMons();
 
+    // Tell lua that a monitor was created.
     _ = try session.config.sendEvent(@import("LuaTypes/Monitor.zig"), .add_monitor, .{ .child = result });
 }
 
@@ -171,7 +177,7 @@ pub fn close(self: *Monitor) !void {
                 .height = client.floating_bounds.height,
             });
 
-            client.setMonitor(new_mon);
+            try client.setMonitor(new_mon);
         }
     }
     if (new_mon.getFocusedClient()) |focus|
@@ -276,17 +282,17 @@ pub fn setLayout(self: *Monitor, layout: ?*Layout) void {
     self.dirty.force_layout = true;
 }
 
-fn deinit(self: *Monitor) void {
-    self.events.present_event.link.remove();
-    self.events.frame_event.link.remove();
-    self.events.deinit_event.link.remove();
+pub fn deinit(self: *Monitor, _: *wlr.Output) !void {
+    self.present_event.event.link.remove();
+    self.frame_event.event.link.remove();
+    self.deinit_event.event.link.remove();
 
     self.link.remove();
 
     allocator.destroy(self);
 }
 
-fn frame(self: *Monitor) !void {
+pub fn frame(self: *Monitor, _: *wlr.Output) !void {
     // TODO:Figure out why this skips
 
     // const tmp_now: std.posix.timespec = std.posix.clock_gettime(std.posix.CLOCK.MONOTONIC) catch
@@ -316,8 +322,7 @@ fn frame(self: *Monitor) !void {
     commit: {
         var iter = self.session.clients.iterator(.forward);
         while (iter.next()) |client| {
-            if (client.dirty.size == true and
-                client.surface == .XDG and
+            if (client.resize != 0 and
                 client.monitor == self and
                 client.visible and
                 !client.isStopped())
@@ -336,7 +341,7 @@ fn frame(self: *Monitor) !void {
     pending.finish();
 }
 
-fn present(self: *Monitor) !void {
+pub fn present(self: *Monitor, _: *wlr.Output.event.Present) !void {
     if (self.dirty.layout or self.dirty.force_layout)
         try self.updateLayout();
 
@@ -369,7 +374,7 @@ fn updateTabs(self: *Monitor) !void {
     }
 }
 
-fn updateLayout(self: *Monitor) !void {
+pub fn updateLayout(self: *Monitor) !void {
     defer self.dirty.layout = false;
     defer self.dirty.force_layout = false;
 

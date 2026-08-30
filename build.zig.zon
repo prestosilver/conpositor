@@ -26,12 +26,16 @@
             .hash = "wayland-0.7.0-dev-lQa1kl38AQC-kQolS5D4jV1GJ2rH2jv1VWHr14YLVnyn",
         },
         .zlua = .{
-            .url = "git+https://github.com/natecraddock/ziglua#d2cb6191ec20f888ab04ad222c9bcf9b194bfbf2",
+            .url = "git+https://github.com/natecraddock/ziglua#9ae39fa50b1ab8427d35f963216116d7bff1e584",
             .hash = "zlua-0.1.0-hGRpC1mUBQCNQf4CnmRTM4I7gxE3YpCvZ-p2EarlcyER",
         },
         .known_folders = .{
             .url = "git+https://github.com/ziglibs/known-folders#207c34a16e4365edc20d92c7892f962b3bed46e8",
             .hash = "known_folders-0.0.0-Fy-PJsbKAACbDh9bBxR0MMThxZSS6A9RH4apWphNHY70",
+        },
+        .ztracy = .{
+            .url = "git+https://github.com/zig-gamedev/ztracy#d95d2a193b9f97944a17026c9a42b5d0f9a88c94",
+            .hash = "ztracy-0.14.0-dev-zHJSqzUHGQAmhJybhlwtl1QKevUBw4M5YKZqPfWx2y99",
         },
     },
     .paths = .{

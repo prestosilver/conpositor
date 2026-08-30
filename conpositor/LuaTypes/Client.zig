@@ -80,12 +80,12 @@ pub fn getTitle(self: *Self) ?[:0]const u8 {
     return self.child.getTitle();
 }
 
-pub fn setTag(self: *Self, tag: *LuaTag) void {
+pub fn setTag(self: *Self, tag: LuaTag) void {
     self.child.setTag(tag.id);
 }
 
-pub fn setMonitor(self: *Self, monitor: LuaMonitor) void {
-    self.child.setMonitor(monitor.child);
+pub fn setMonitor(self: *Self, monitor: LuaMonitor) !void {
+    try self.child.setMonitor(monitor.child);
 }
 
 pub fn getStack(self: *Self) ?LuaStack {
@@ -185,9 +185,7 @@ pub fn format(self: Self, writer: *std.Io.Writer) !void {
 }
 
 pub fn fromLua(lua: *Lua, _: ?std.mem.Allocator, index: i32) !Self {
-    _ = lua.getField(index, "instance");
-    const result = try lua.toUserdata(Self, -1);
-    lua.pop(1);
+    const result = try lua.toUserdata(Self, index);
 
     return result.*;
 }

@@ -2,20 +2,20 @@ const wl = @import("wayland").server.wl;
 const wlr = @import("wlroots");
 const std = @import("std");
 
+const trace = @import("trace.zig");
 const Session = @import("Session.zig");
 const Monitor = @import("Monitor.zig");
 const Config = @import("Config.zig");
+const ObjectTag = @import("ObjectTag.zig").ObjectTag;
 
 const LayerSurface = @This();
 
 const allocator = Config.allocator;
 
-surface_id: u8 = 25,
+object_tag: ObjectTag = .layer_surface,
 
 session: *Session,
 monitor: ?*Monitor,
-events: Events = .{},
-
 surface: *wlr.LayerSurfaceV1,
 scene: *wlr.SceneLayerSurfaceV1,
 scene_tree: *wlr.SceneTree,
@@ -24,46 +24,10 @@ mapped: bool = false,
 link: wl.list.Link = undefined,
 bounds: wlr.Box = std.mem.zeroes(wlr.Box),
 
-const Events = struct {
-    map_event: wl.Listener(void) = .init(Events.map),
-    unmap_event: wl.Listener(void) = .init(Events.unmap),
-    commit_event: wl.Listener(*wlr.Surface) = .init(Events.commit),
-    deinit_event: wl.Listener(*wlr.Surface) = .init(Events.deinit),
-
-    fn map(listener: *wl.Listener(void)) void {
-        const events: *LayerSurface.Events = @fieldParentPtr("map_event", listener);
-        const surface: *LayerSurface = @fieldParentPtr("events", events);
-
-        surface.map() catch |ex| {
-            @panic(@errorName(ex));
-        };
-    }
-
-    fn commit(listener: *wl.Listener(*wlr.Surface), _: *wlr.Surface) void {
-        const events: *LayerSurface.Events = @fieldParentPtr("commit_event", listener);
-        const surface: *LayerSurface = @fieldParentPtr("events", events);
-
-        surface.commit() catch |ex| {
-            @panic(@errorName(ex));
-        };
-    }
-
-    fn unmap(listener: *wl.Listener(void)) void {
-        const events: *LayerSurface.Events = @fieldParentPtr("unmap_event", listener);
-        const surface: *LayerSurface = @fieldParentPtr("events", events);
-
-        surface.unmap() catch |ex| {
-            @panic(@errorName(ex));
-        };
-    }
-
-    fn deinit(listener: *wl.Listener(*wlr.Surface), _: *wlr.Surface) void {
-        const events: *LayerSurface.Events = @fieldParentPtr("deinit_event", listener);
-        const surface: *LayerSurface = @fieldParentPtr("events", events);
-
-        surface.deinit();
-    }
-};
+map_event: trace.Event(void, "map", LayerSurface) = .{},
+unmap_event: trace.Event(void, "unmap", LayerSurface) = .{},
+commit_event: trace.Event(*wlr.Surface, "commit", LayerSurface) = .{},
+deinit_event: trace.Event(*wlr.Surface, "deinit", LayerSurface) = .{},
 
 pub fn init(session: *Session, surf: *wlr.LayerSurfaceV1) !void {
     const monitor: *Monitor = if (surf.output) |output|
@@ -84,8 +48,8 @@ pub fn init(session: *Session, surf: *wlr.LayerSurfaceV1) !void {
     surf.output = monitor.output;
 
     const result = try allocator.create(LayerSurface);
-    scene_tree.node.data = @ptrCast(@alignCast(result));
-    surf.data = @ptrCast(@alignCast(result));
+    scene_tree.node.data = @ptrCast(@alignCast(&result.object_tag));
+    surf.data = @ptrCast(@alignCast(&result.object_tag));
 
     result.* = .{
         .surface = surf,
@@ -96,10 +60,10 @@ pub fn init(session: *Session, surf: *wlr.LayerSurfaceV1) !void {
         .popups = popups,
     };
 
-    surf.surface.events.map.add(&result.events.map_event);
-    surf.surface.events.unmap.add(&result.events.unmap_event);
-    surf.surface.events.commit.add(&result.events.commit_event);
-    surf.surface.events.destroy.add(&result.events.deinit_event);
+    surf.surface.events.map.add(&result.map_event.event);
+    surf.surface.events.unmap.add(&result.unmap_event.event);
+    surf.surface.events.commit.add(&result.commit_event.event);
+    surf.surface.events.destroy.add(&result.deinit_event.event);
 
     monitor.layers[@intCast(@intFromEnum(surf.pending.layer))].append(result);
 
@@ -119,13 +83,13 @@ pub fn notifyEnter(self: *LayerSurface, seat: *wlr.Seat, kb: ?*wlr.Keyboard) voi
     }
 }
 
-fn map(self: *LayerSurface) !void {
+pub fn map(self: *LayerSurface) !void {
     try self.session.input.motionNotify(0);
 
     std.log.debug("Maped layer surface {*}", .{self});
 }
 
-fn commit(self: *LayerSurface) !void {
+pub fn commit(self: *LayerSurface, _: *wlr.Surface) !void {
     std.log.debug("Configure layer surface {*} on {*}", .{ self, self.monitor });
 
     if (self.surface.output) |output| {
@@ -155,7 +119,7 @@ fn commit(self: *LayerSurface) !void {
         try m.arrangeLayers();
 }
 
-fn unmap(self: *LayerSurface) !void {
+pub fn unmap(self: *LayerSurface) !void {
     self.mapped = false;
     self.scene_tree.node.setEnabled(false);
 
@@ -171,7 +135,7 @@ fn unmap(self: *LayerSurface) !void {
     std.log.debug("Unmapped layer surface {*}", .{self});
 }
 
-fn deinit(self: *LayerSurface) void {
+pub fn deinit(self: *LayerSurface, _: *wlr.Surface) !void {
     std.log.debug("Deinit layer surface {*}", .{self});
 
     self.link.remove();
@@ -179,10 +143,10 @@ fn deinit(self: *LayerSurface) void {
     if (self.monitor) |m|
         m.arrangeLayers() catch {};
 
-    self.events.map_event.link.remove();
-    self.events.unmap_event.link.remove();
-    self.events.deinit_event.link.remove();
-    self.events.commit_event.link.remove();
+    self.map_event.event.link.remove();
+    self.unmap_event.event.link.remove();
+    self.deinit_event.event.link.remove();
+    self.commit_event.event.link.remove();
 
     allocator.destroy(self);
 }

@@ -1,9 +1,11 @@
-local gaps = require("lib.gaps")   -- A gap utility library
-local funcs = require("lib.funcs") -- Helper functions for bindings
-local mouse = require("lib.mouse") -- Some usual mouse binds so you dont have to implement them
+-- This is required to initialize LSP properly
+--- @module 'types.all'
+local gaps = require("lib.gaps")   --- @class gaps
+local funcs = require("lib.funcs") --- @class funcs
+local mouse = require("lib.mouse") --- @class mouse
 
 -- add an escape first in case of a lua crash
-session:add_bind("AS", "Escape", funcs.quit())
+session:bind("AS", "Escape", funcs.quit())
 
 -- load a colorscheme
 -- TODO: impl
@@ -16,14 +18,17 @@ end
 local mod = "L"
 
 -- setup libraries
-gaps.setup { inc = 2, toggle = true, value = 8, ratio = 2, outer = 30 }
+gaps.setup { inc = 4, toggle = true, value = 4, ratio = 2, outer = 20 }
 mouse.setup {}
 
 -- Create default tags
 local stacks = { a = 1, b = 2, c = 3, d = 4, e = 5 }
-local tags = { session:new_tag("F1"), session:new_tag("F2"), session:new_tag("F3"), session:new_tag("F4") }
+local tags = { "F1", "F2", "F3", "F4" }
 
--- Create default layouts
+for tag, name in pairs(tags) do
+    session.tags[tag].name = name
+end
+
 local function setup_abcd(root_container, ab_split, in_ac_split, in_bd_split, flip)
     local ac_split = in_ac_split
     local bd_split = in_bd_split
@@ -85,7 +90,9 @@ session:hook("add_monitor", function(monitor)
     monitor:set_layout(default_layout)
 end)
 
--- Setup mouse config
+--- Setup mouse config
+
+--- @type Client?
 local mouse_client = nil
 local mouse_client_position = {}
 local mouse_floating = false
@@ -145,33 +152,38 @@ end
 mouse.addBind("resize", mouse_resize)
 mouse.addBind("move", mouse_move)
 
-session:add_mouse_bind("L", "Left", mouse.bind("move"))
-session:add_mouse_bind("L", "Right", mouse.bind("resize"))
+session:mouse_bind("client", super, "Left", mouse.bind("move"))
+session:mouse_bind("client", super, "Right", mouse.bind("resize"))
+session:mouse_bind("frame", super, "Left", mouse.bind("move"))
+session:mouse_bind("frame", super, "Right", mouse.bind("resize"))
+
+session:mouse_bind("frame", "", "Left", mouse.bind("move"))
+session:mouse_bind("frame", "", "Right", mouse.bind("resize"))
 
 -- programs
-session:add_bind("L", "Return", funcs.spawn("foot"))
+session:bind("L", "Return", funcs.spawn("foot"))
 
 -- Floating
-session:add_bind("L", "Space", funcs.toggle_floating())
-session:add_bind("L", "F", funcs.toggle_fullscreen())
-session:add_bind("L", "Q", funcs.kill_client())
+session:bind("L", "Space", funcs.toggle_floating())
+session:bind("L", "F", funcs.toggle_fullscreen())
+session:bind("L", "Q", funcs.kill_client())
 
 -- tags
-for idx, tag in pairs(tags) do
-    session:add_bind("L", "F" .. idx, funcs.set_monitor_tag(tag))
-    session:add_bind("LS", "F" .. idx, funcs.set_client_tag(tag))
+for tag, name in pairs(tags) do
+    session:bind(super, name, funcs.set_monitor_tag(tag))
+    session:bind(super .. "S", name, funcs.set_client_tag(tag))
 end
 
 -- stacks
-for name, stack in pairs(stacks) do
-    session:add_bind("LS", "" .. stack, funcs.set_client_stack(stack))
+for _, stack in pairs(stacks) do
+    session:bind(super .. "S", "" .. stack, funcs.set_client_stack(stack))
 end
 
 -- debug tools
-session:add_bind("L", "P", funcs.reload())
-session:add_bind("L", "G", gaps.increase)
-session:add_bind("LS", "G", gaps.decrease)
-session:add_bind("LS", "V", gaps.toggle)
+session:bind("L", "P", funcs.reload())
+session:bind("L", "G", gaps.increase)
+session:bind("LS", "G", gaps.decrease)
+session:bind("LS", "V", gaps.toggle)
 
 -- title modules
 local icon_module = TextModule.new(function(client)
@@ -182,42 +194,26 @@ local title_module = TextModule.new(function(client)
     return client.label or client.title or ""
 end)
 
-local debug_module = TextModule.new(function(client)
-    local label = client.label or "(none)"
-    local title = client.title or "(none)"
-    local appid = client.appid or "(none)"
-    return "[" .. label .. "] title: '" .. title .. "' appid: '" .. appid .. "'"
-end)
-
 local default_modules = {
-    left = {},
-    center = { icon_module, title_module },
-    right = {}
-}
-
-local debug_modules = {
     left = { icon_module },
-    center = { debug_module },
-    right = { title_module }
+    center = { title_module },
+    right = {}
 }
 
 -- default modules
 session:add_rule({}, function(client)
-    client:set_modules(default_modules)
+    client.modules = default_modules
 end)
 
 -- module switch bind
-session:add_bind(super .. "S", "L", debug_window_set(false))
-session:add_bind(super, "L", debug_window_set(true))
+session:bind(super .. "S", "L", debug_window_set(false))
+session:bind(super, "L", debug_window_set(true))
 
--- default container
+-- default rule
 session:add_rule({}, function(client)
-    client:set_stack(nil)
-end)
-
--- default border width
-session:add_rule({}, function(client)
-    client:set_border(3)
+    client.stack = stacks.c
+    client.floating = true
+    client.border = 6
 end)
 
 -- Other rules should go here. Rules apply to all clients

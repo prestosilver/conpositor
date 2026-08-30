@@ -1,3 +1,4 @@
+--- @class gaps
 local M = {}
 
 -- TODO: Make this per monitor
@@ -51,15 +52,15 @@ function M.decrease()
     M.set(M.gaps_value - M.gaps_inc)
 end
 
----@class GapsConfig
----@field inc ?string The size to increase and decrease gaps by
----@field value ?bool The default visibility of gaps
----@field toggle ?number The default gaps radius
+---@class gaps.Config
+---@field inc ?number The size to increase and decrease gaps by
+---@field toggle ?boolean The default visibility of gaps
+---@field value ?number The default gaps radius
 ---@field ratio ?number How many pixels increase the outer radius
 ---@field outer ?number How many pixels to add to the outer radius
 
 --- Init gaps
---- @param config GapsConfig The module config
+--- @param config gaps.Config The module config
 function M.setup(config)
     if M.init then
         return
