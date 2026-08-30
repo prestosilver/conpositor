@@ -1,6 +1,6 @@
 -- This is required to initialize LSP properly
 --- @module 'types.all'
-local gaps = require("lib.gaps") --- @class gaps
+local gaps = require("lib.gaps")   --- @class gaps
 local funcs = require("lib.funcs") --- @class funcs
 local mouse = require("lib.mouse") --- @class mouse
 
@@ -152,8 +152,13 @@ end
 mouse.addBind("resize", mouse_resize)
 mouse.addBind("move", mouse_move)
 
-session:add_mouse_bind("L", "Left", mouse.bind("move"))
-session:add_mouse_bind("L", "Right", mouse.bind("resize"))
+session:mouse_bind("client", super, "Left", mouse.bind("move"))
+session:mouse_bind("client", super, "Right", mouse.bind("resize"))
+session:mouse_bind("frame", super, "Left", mouse.bind("move"))
+session:mouse_bind("frame", super, "Right", mouse.bind("resize"))
+
+session:mouse_bind("frame", "", "Left", mouse.bind("move"))
+session:mouse_bind("frame", "", "Right", mouse.bind("resize"))
 
 -- programs
 session:bind("L", "Return", funcs.spawn("foot"))
