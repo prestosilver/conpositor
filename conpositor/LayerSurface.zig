@@ -6,12 +6,13 @@ const trace = @import("trace.zig");
 const Session = @import("Session.zig");
 const Monitor = @import("Monitor.zig");
 const Config = @import("Config.zig");
+const ObjectTag = @import("ObjectTag.zig").ObjectTag;
 
 const LayerSurface = @This();
 
 const allocator = Config.allocator;
 
-surface_id: u8 = 25,
+object_tag: ObjectTag = .layer_surface,
 
 session: *Session,
 monitor: ?*Monitor,
@@ -47,8 +48,8 @@ pub fn init(session: *Session, surf: *wlr.LayerSurfaceV1) !void {
     surf.output = monitor.output;
 
     const result = try allocator.create(LayerSurface);
-    scene_tree.node.data = @ptrCast(@alignCast(result));
-    surf.data = @ptrCast(@alignCast(result));
+    scene_tree.node.data = @ptrCast(@alignCast(&result.object_tag));
+    surf.data = @ptrCast(@alignCast(&result.object_tag));
 
     result.* = .{
         .surface = surf,

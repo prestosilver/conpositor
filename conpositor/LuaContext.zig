@@ -551,6 +551,7 @@ pub const LUA_TYPES = [_]LuaType{
                 .description = "Adds a mouse bind",
 
                 .params = &.{
+                    .{ .name = "kind", .kind = "\"client\" | \"border\"", .desc = "The area to trigger the event" },
                     .{ .name = "modifiers", .kind = "string", .desc = "The mod keys in the bind" },
                     .{ .name = "button", .kind = "string", .desc = "The button to be bound" },
                     .{ .name = "callback", .kind = "fun(client: Client, position: Vector2)", .desc = "The callback to run" },

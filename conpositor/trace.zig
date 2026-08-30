@@ -31,7 +31,8 @@ pub fn Event(comptime Data: type, comptime name: []const u8, comptime Base: type
                 const tracy_zone = ztracy.ZoneNC(src, @typeName(Base) ++ ":" ++ name ++ "_event", color);
                 defer tracy_zone.End();
 
-                std.log.debug(@typeName(Base) ++ ":" ++ name ++ "_event", .{});
+                if (false)
+                    std.log.debug(@typeName(Base) ++ ":" ++ name ++ "_event", .{});
 
                 // get the pointer to the base class this event is tied to
                 const ev: *Self = @fieldParentPtr("event", listener);
@@ -53,7 +54,8 @@ pub fn Event(comptime Data: type, comptime name: []const u8, comptime Base: type
                 const tracy_zone = ztracy.ZoneNC(src, @typeName(Base) ++ ":" ++ name ++ "_event", color);
                 defer tracy_zone.End();
 
-                std.log.debug(@typeName(Base) ++ ":" ++ name ++ "_event", .{});
+                if (false)
+                    std.log.debug(@typeName(Base) ++ ":" ++ name ++ "_event", .{});
 
                 // get the pointer to the base class this event is tied to
                 const ev: *Self = @fieldParentPtr("event", listener);

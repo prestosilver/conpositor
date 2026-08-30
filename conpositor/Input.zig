@@ -10,6 +10,7 @@ const Client = @import("Client.zig");
 const Config = @import("Config.zig");
 
 const LuaVector = @import("LuaTypes/Vector.zig");
+const LuaSession = @import("LuaTypes/Session.zig");
 
 const Input = @This();
 
@@ -455,7 +456,7 @@ pub fn motionNotify(
     const objects = self.session.getObjectsAt(self.cursor.x, self.cursor.y);
 
     if (self.cursor_mode == .pressed and self.seat.drag == null) {
-        std.log.warn("TODO: check if clicking window", .{});
+        //std.log.warn("TODO: check if clicking window", .{});
     }
 
     if (time > 0) {
@@ -487,7 +488,9 @@ pub fn motionNotify(
     if (self.cursor_mode == .lua and try self.session.config.sendEvent(LuaVector, .mouse_move, data))
         return;
 
-    if (objects.surface == null and
+    const tag = objects.tag orelse return;
+
+    if (tag.getSurface() == null and
         self.seat.drag == null and
         self.xcursor_image != null and
         !std.mem.eql(u8, std.mem.span(self.xcursor_image.?), "left_ptr"))
@@ -545,12 +548,15 @@ fn pointerFocus(self: *Input, objects: Session.ObjectData, time: usize) !void {
     const internal_call = time == 0;
     var atime: usize = time;
 
-    if (!internal_call and
-        objects.client != null and
-        !(objects.client.?.surface == .X11 and !objects.client.?.managed))
-        try self.session.focusClient(objects.client.?, false);
+    const tag = objects.tag orelse return;
+    if (!internal_call) {
+        if (tag.toClient()) |client| {
+            if (!(client.surface == .X11 and !client.managed))
+                try self.session.focusClient(client, false);
+        }
+    }
 
-    const surface = objects.surface orelse {
+    const surface = tag.getSurface() orelse {
         self.seat.pointerNotifyClearFocus();
         return;
     };
@@ -564,7 +570,7 @@ fn pointerFocus(self: *Input, objects: Session.ObjectData, time: usize) !void {
         atime = @bitCast(now.sec * 1000 + @divTrunc(now.nsec, 1000000));
     }
 
-    if (objects.client) |client| {
+    if (tag.toClient()) |client| {
         const bounds = client.getBounds();
         const inner_bounds = client.getInnerBounds();
 
@@ -579,7 +585,7 @@ fn pointerFocus(self: *Input, objects: Session.ObjectData, time: usize) !void {
         self.seat.pointerNotifyMotion(@intCast(atime), x, y);
     }
 
-    if (objects.layer_surface) |layer_surface| {
+    if (tag.toLayerSurface()) |layer_surface| {
         std.log.warn("Click layer surf", .{});
 
         const bounds = layer_surface.bounds;
@@ -605,13 +611,28 @@ fn cursorButton(self: *Input, button: *wlr.Pointer.event.Button) !void {
 
             const objects = self.session.getObjectsAt(self.cursor.x, self.cursor.y);
 
-            if (objects.client) |target| {
+            const tag = objects.tag orelse break :handle_press;
+
+            if (tag.toClient()) |target| {
                 if (!target.managed)
                     try self.session.focusClient(target, true);
 
                 const keyboard = self.seat.getKeyboard();
                 const mods = if (keyboard) |keyb| keyb.getModifiers() else wlr.Keyboard.ModifierMask{};
-                if (try self.session.config.mouseBind(.{ .mods = mods, .button = button.button }, .{ .x = self.cursor.x, .y = self.cursor.y }, objects.client)) {
+                const click_target: LuaSession.MouseBindData.Target = switch (tag.*) {
+                    .client => .client,
+                    .client_frame => .frame,
+                    .client_shadow => .shadow,
+                    else => unreachable,
+                };
+
+                std.log.info("start click {s}", .{@tagName(click_target)});
+
+                if (try self.session.config.mouseBind(
+                    .{ .mods = mods, .button = button.button, .target = click_target },
+                    .{ .x = self.cursor.x, .y = self.cursor.y },
+                    target,
+                )) {
                     self.cursor_mode = .lua;
                     self.grab_client = target;
                     return;

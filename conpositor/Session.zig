@@ -13,6 +13,7 @@ const Client = @import("Client.zig");
 const Input = @import("Input.zig");
 const LayerSurface = @import("LayerSurface.zig");
 const IpcManager = @import("IpcManager.zig");
+const ObjectTag = @import("ObjectTag.zig").ObjectTag;
 
 const Session = @This();
 
@@ -258,39 +259,28 @@ pub fn commitpopup(self: *Session, surface: *wlr.Surface) !void {
     std.log.debug("Configure popup {*}", .{popup});
 
     const objects = self.getSurfaceObjects(popup.base.surface);
-    if (popup.parent == null or (objects.client == null and objects.layer_surface == null))
+    if (popup.parent == null or objects.tag == null)
         return;
 
     const parent = @as(?*wlr.SceneTree, @ptrCast(@alignCast(popup.parent.?.data))) orelse
-        if (objects.client) |client|
+        if (objects.tag) |*tag| (if (tag.*.toClient()) |client|
             client.popup_surface
-        else if (objects.layer_surface) |layer_surface|
+        else if (tag.*.toLayerSurface()) |layer_surface|
             layer_surface.scene_tree
         else
-            unreachable;
+            unreachable) else unreachable;
 
     const new_surface = try parent.createSceneXdgSurface(popup.base);
     popup.base.surface.data = @ptrCast(@alignCast(new_surface));
 
-    var box = if (objects.client) |client|
-        client.monitor.?.window
-    else if (objects.layer_surface) |layer_surface|
-        layer_surface.monitor.?.mode
+    var box = if (objects.tag.?.* == .layer_surface)
+        objects.monitor.?.mode
     else
-        unreachable;
+        objects.monitor.?.window;
 
-    box.x -= if (objects.client) |client|
-        client.getInnerBounds().x
-    else if (objects.layer_surface) |layer_surface|
-        layer_surface.bounds.x
-    else
-        unreachable;
-    box.y -= if (objects.client) |client|
-        client.getInnerBounds().y
-    else if (objects.layer_surface) |layer_surface|
-        layer_surface.bounds.y
-    else
-        unreachable;
+    const object_bounds = objects.tag.?.getBounds() orelse unreachable;
+    box.x -= object_bounds.x;
+    box.y -= object_bounds.y;
 
     popup.unconstrainFromBox(&box);
 }
@@ -689,12 +679,12 @@ pub fn getSurfaceObjects(self: *Session, surface: *wlr.Surface) ObjectData {
 
     if (wlr.XwaylandSurface.tryFromWlrSurface(root_surface)) |x_surface|
         return .{
-            .client = @ptrCast(@alignCast(x_surface.data)),
+            .tag = @ptrCast(@alignCast(x_surface.data)),
         };
 
     if (wlr.LayerSurfaceV1.tryFromWlrSurface(root_surface)) |layer_surface|
         return .{
-            .layer_surface = @ptrCast(@alignCast(layer_surface.data)),
+            .tag = @ptrCast(@alignCast(layer_surface.data)),
         };
 
     var vxdg_surface = wlr.XdgSurface.tryFromWlrSurface(root_surface);
@@ -710,7 +700,7 @@ pub fn getSurfaceObjects(self: *Session, surface: *wlr.Surface) ObjectData {
             },
             .toplevel => {
                 return .{
-                    .client = @ptrCast(@alignCast(xdg_surface.*.data)),
+                    .tag = @ptrCast(@alignCast(xdg_surface.*.data)),
                 };
             },
             .none => return .{},
@@ -784,10 +774,8 @@ pub fn focusClear(self: *Session) void {
 }
 
 pub const ObjectData = struct {
-    client: ?*Client = null,
-    layer_surface: ?*LayerSurface = null,
+    tag: ?*ObjectTag = null,
 
-    surface: ?*wlr.Surface = null,
     surface_x: f64 = 0.0,
     surface_y: f64 = 0.0,
 
@@ -808,23 +796,10 @@ pub fn getObjectsAt(self: *Session, x: f64, y: f64) ObjectData {
             continue;
 
         var pnode: ?*wlr.SceneNode = node;
-        while (pnode != null and (result.client == null and result.layer_surface == null)) : (pnode = &pnode.?.parent.?.node) {
-            result.client = @as(?*Client, @ptrCast(@alignCast(pnode.?.data)));
-            result.layer_surface = @as(?*LayerSurface, @ptrCast(@alignCast(pnode.?.data)));
-
-            if (result.client != null and result.client.?.client_id != 10)
-                result.client = null;
-
-            if (result.layer_surface != null and result.layer_surface.?.surface_id != 25)
-                result.layer_surface = null;
+        while (pnode != null and result.tag == null) : (pnode = &pnode.?.parent.?.node) {
+            result.tag = @as(?*ObjectTag, @ptrCast(@alignCast(pnode.?.data)));
         }
     }
-
-    if (result.client) |client|
-        result.surface = client.getSurface();
-
-    if (result.layer_surface) |layer_surface|
-        result.surface = layer_surface.surface.surface;
 
     return result;
 }

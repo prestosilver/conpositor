@@ -12,6 +12,7 @@ const Session = @import("Session.zig");
 const Monitor = @import("Monitor.zig");
 const Config = @import("Config.zig");
 const Tab = @import("Tab.zig");
+const ObjectTag = @import("ObjectTag.zig").ObjectTag;
 
 const Client = @This();
 
@@ -25,36 +26,38 @@ const SurfaceKind = enum { XDG, X11 };
 const FrameKind = enum { hide, border, title };
 
 // The frame of a client
-const ClientFrame = struct {
+pub const ClientFrame = struct {
     is_init: bool = false,
 
     title_buffer: *CairoBuffer = undefined,
 
+    object_tag: ObjectTag = .client_frame,
+    shadow_tag: ObjectTag = .client_shadow,
     shadow: [2]*wlr.SceneRect = undefined,
     shadow_tree: *wlr.SceneTree = undefined,
     border_tree: *wlr.SceneTree = undefined,
     sides: [4]*wlr.SceneRect = undefined,
     buffer_scene: *wlr.SceneBuffer = undefined,
 
-    pub fn init(color: *const [4]f32, client: *Client) !ClientFrame {
+    pub fn init(self: *ClientFrame, color: *const [4]f32, client: *Client) !void {
         const shadow_scene = client.session.layers.get(.LyrFloatShadows);
 
         var shadow_tree = try shadow_scene.createSceneTree();
-        shadow_tree.node.data = @ptrCast(client);
+        shadow_tree.node.data = @ptrCast(&self.shadow_tag);
 
         var border_tree = try client.scene.createSceneTree();
-        border_tree.node.data = @ptrCast(client);
+        border_tree.node.data = @ptrCast(&self.object_tag);
 
         var sides: [4]*wlr.SceneRect = undefined;
         for (&sides) |*side| {
             side.* = try border_tree.createSceneRect(0, 0, color);
-            side.*.node.data = @ptrCast(client);
+            side.*.node.data = @ptrCast(&self.object_tag);
         }
 
         var shadow: [2]*wlr.SceneRect = undefined;
         for (&shadow) |*side| {
             side.* = try shadow_tree.createSceneRect(0, 0, &.{ 0, 0, 0, 0.5 });
-            side.*.node.data = @ptrCast(client);
+            side.*.node.data = @ptrCast(&self.object_tag);
         }
 
         const title_buffer = try CairoBuffer.init(1, 1, 1.0);
@@ -62,12 +65,15 @@ const ClientFrame = struct {
 
         shadow_tree.node.setEnabled(false);
 
-        return .{
+        const buffer_scene = try client.scene.createSceneBuffer(locked);
+        buffer_scene.*.node.data = @ptrCast(&self.object_tag);
+
+        self.* = .{
             .is_init = true,
             .sides = sides,
             .shadow = shadow,
             .title_buffer = title_buffer,
-            .buffer_scene = try client.scene.createSceneBuffer(locked),
+            .buffer_scene = buffer_scene,
             .shadow_tree = shadow_tree,
             .border_tree = border_tree,
         };
@@ -91,7 +97,7 @@ pub const ClientSurface = union(SurfaceKind) {
 };
 
 // TODO: Switch to an enum
-client_id: u8 = 10,
+object_tag: ObjectTag = .client,
 
 // A ref to the parent session, useful for quick access
 session: *Session,
@@ -171,9 +177,9 @@ pub fn init(session: *Session, target: ClientSurface) !void {
                 return;
 
             const client = try allocator.create(Client);
-            surface.data = @ptrCast(client);
 
             client.* = .{ .surface = target, .session = session, .managed = true };
+            surface.data = @ptrCast(&client.object_tag);
 
             std.log.debug("Add xdg surface {*} to {*}", .{ target.XDG, client });
 
@@ -188,9 +194,9 @@ pub fn init(session: *Session, target: ClientSurface) !void {
         },
         .X11 => |surface| {
             const client = try allocator.create(Client);
-            surface.data = @ptrCast(client);
-
             client.* = .{ .surface = target, .session = session, .managed = !surface.override_redirect };
+
+            surface.data = @ptrCast(&client.object_tag);
 
             std.log.debug("Add x11 surface {*} to {*}", .{ target.X11, client });
 
@@ -866,13 +872,13 @@ pub fn map(self: *Client) !void {
     };
     self.popup_surface = try self.scene.createSceneTree();
 
-    self.scene.node.data = @ptrCast(self);
-    self.scene_surface.node.data = @ptrCast(self);
+    self.scene.node.data = @ptrCast(&self.object_tag);
+    self.scene_surface.node.data = @ptrCast(&self.object_tag);
 
     self.scene.node.setEnabled(false);
     self.scene_surface.node.setEnabled(true);
 
-    self.frame = try .init(self.session.config.getColor(false, .border), self);
+    try self.frame.init(self.session.config.getColor(false, .border), self);
 
     self.session.clients.append(self);
     self.session.focus_clients.append(self);
